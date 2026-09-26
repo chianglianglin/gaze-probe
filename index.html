@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gaze Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1EF; --panel:#FFFFFF; --ink:#15201D; --muted:#5B6B66; --line:#D3DBD8;
+  --accent:#D9480F; --accent-2:#1B7F79; --ok:#2F8F4E; --warn:#B7791F; --bad:#C0392B;
+  --stage:#0F1513;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0E1312; --panel:#161D1B; --ink:#E4ECE9; --muted:#8FA19B; --line:#27322F;
+    --accent:#FF7A3D; --accent-2:#4FC1B9; --ok:#5CC27E; --warn:#E3B04B; --bad:#EF6F61; --stage:#050807;
+    color-scheme:dark; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.5 "IBM Plex Sans TC",system-ui,-apple-system,"Noto Sans TC",sans-serif}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:16px;
+  padding-block:calc(env(safe-area-inset-top,0px) + 12px) calc(env(safe-area-inset-bottom,0px) + 24px)}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+h1{font-size:18px;margin:0;letter-spacing:.02em}
+h1 small{display:block;font-size:12px;color:var(--muted);font-weight:400;letter-spacing:0}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+  padding:8px 14px;border-radius:8px;cursor:pointer;min-height:40px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+button.rec{color:var(--bad)}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:12px}
+@media (max-width:760px){.grid{grid-template-columns:1fr}}
+@media (max-width:440px){.cards{gap:8px}.card{padding:10px}}
+.stage{position:relative;background:var(--stage);border-radius:10px;overflow:hidden;aspect-ratio:3/4;max-height:70vh;width:100%}
+@media (min-width:761px){.stage{aspect-ratio:4/3}}
+.stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.stage .msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;
+  color:#C9D4D0;padding:24px;font-size:14px}
+.badge{position:absolute;left:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:3px 8px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff}
+.chip.ok{background:rgba(47,143,78,.85)} .chip.bad{background:rgba(192,57,43,.85)} .chip.warn{background:rgba(183,121,31,.9)}
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card h2{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 8px;letter-spacing:.06em;text-transform:uppercase}
+.card.wide{grid-column:1/-1}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right}
+.big{font-size:22px;font-weight:600}
+.gaze-box{position:relative;aspect-ratio:1;max-width:160px;margin:0 auto;border:1px solid var(--line);border-radius:8px;
+  background:repeating-linear-gradient(0deg,transparent 0 24.5%,var(--line) 24.5% 25%),repeating-linear-gradient(90deg,transparent 0 24.5%,var(--line) 24.5% 25%)}
+.gaze-box .dot{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--accent);left:50%;top:50%;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 25%,transparent)}
+.bar{display:grid;grid-template-columns:minmax(4.5em,auto) 1fr 2.8em;align-items:center;gap:8px;font-size:12px}
+.bar .t{height:8px;background:color-mix(in srgb,var(--line) 70%,transparent);border-radius:4px;overflow:hidden}
+.bar .f{height:100%;background:var(--accent-2);width:0}
+.bars{display:grid;gap:5px}
+.note{font-size:12px;color:var(--muted);margin:6px 0 0}
+.status{font-size:12px;color:var(--muted);margin:8px 0 0;min-height:1.5em}
+/* calibration + live gaze overlay */
+#calib{position:fixed;inset:0;background:var(--bg);z-index:50}
+#calib .pt{position:absolute;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 25%,transparent)}
+#calib .pt::after{content:"";position:absolute;inset:10px;border-radius:50%;background:#fff}
+#calib .info{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;color:var(--muted);max-width:80%}
+#calib .ring{position:absolute;inset:-6px;border-radius:50%;border:3px solid var(--accent-2);clip-path:inset(0 0 0 0)}
+#gazeDot{position:fixed;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;border:3px solid var(--accent);
+  background:color-mix(in srgb,var(--accent) 18%,transparent);pointer-events:none;z-index:40;transition:left .08s linear,top .08s linear}
+@media (prefers-reduced-motion:reduce){#gazeDot{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Gaze Probe<small>MediaPipe Face Landmarker · 前鏡頭即時視線與臉部特徵</small></h1>
+    <div class="btns">
+      <button id="btnStart" class="primary">開啟鏡頭</button>
+      <button id="btnCalib" disabled>視線校準（9 點）</button>
+      <button id="btnRec" disabled>開始記錄</button>
+      <button id="btnCsv" disabled>匯出 CSV</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="stage" id="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="msg" id="stageMsg">按「開啟鏡頭」並允許相機權限。<br>影像只在這台裝置上處理。</div>
+        <div class="badge" id="badges" hidden>
+          <span class="chip" id="chipFace">—</span>
+          <span class="chip" id="chipScreen">—</span>
+          <span class="chip mono" id="chipFps">— fps</span>
+        </div>
+      </div>
+      <p class="status mono" id="status">模型尚未載入</p>
+    </div>
+
+    <div class="cards">
+      <section class="card">
+        <h2>眼球方向</h2>
+        <div class="gaze-box"><div class="dot" id="gDot"></div></div>
+        <dl class="kv mono" style="margin-top:8px">
+          <dt>水平</dt><dd id="gH">—</dd>
+          <dt>垂直</dt><dd id="gV">—</dd>
+        </dl>
+        <p class="note">由 eyeLook* blendshapes 計算，右＝使用者右方、上＝往上看</p>
+      </section>
+
+      <section class="card">
+        <h2>頭部姿態</h2>
+        <dl class="kv mono">
+          <dt>Yaw 左右轉</dt><dd id="hYaw">—</dd>
+          <dt>Pitch 抬低頭</dt><dd id="hPitch">—</dd>
+          <dt>Roll 歪頭</dt><dd id="hRoll">—</dd>
+          <dt>距離（估）</dt><dd id="hDist">—</dd>
+        </dl>
+        <p class="note">距離用虹膜直徑 11.7 mm 與假設 60° 視角推算，僅供相對比較</p>
+      </section>
+
+      <section class="card">
+        <h2>眨眼</h2>
+        <div class="bars">
+          <div class="bar"><span>左眼閉合</span><span class="t"><span class="f" id="bL"></span></span><span class="mono" id="bLv">—</span></div>
+          <div class="bar"><span>右眼閉合</span><span class="t"><span class="f" id="bR"></span></span><span class="mono" id="bRv">—</span></div>
+        </div>
+        <dl class="kv mono" style="margin-top:8px">
+          <dt>累計次數</dt><dd id="blinkN">0</dd>
+          <dt>近 60 秒</dt><dd id="blinkRate">—</dd>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2>注意力指標</h2>
+        <dl class="kv mono">
+          <dt>朝向螢幕比例</dt><dd class="big" id="onPct">—</dd>
+          <dt>離開畫面累計</dt><dd id="awayT">0.0 s</dd>
+          <dt>最長連續離開</dt><dd id="awayMax">0.0 s</dd>
+          <dt>記錄中影格</dt><dd id="recN">0</dd>
+        </dl>
+        <p class="note">朝向螢幕：有臉、|yaw|&lt;20°、|pitch|&lt;20°、眼球水平偏移 &lt;0.45</p>
+      </section>
+
+      <section class="card wide">
+        <h2>臉部表情 blendshapes（前 10 名）</h2>
+        <div class="bars" id="bsList"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div id="calib" hidden>
+  <div class="info" id="calibInfo">盯著橘色圓點，不要移動頭部。<br>每個點約 1.5 秒，共 9 點。<br><br><button id="calibGo" class="primary">開始</button> <button id="calibCancel">取消</button></div>
+</div>
+<div id="gazeDot" hidden></div>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
+
+const $ = id => document.getElementById(id);
+const video = $("video"), canvas = $("overlay"), ctx = canvas.getContext("2d");
+const statusEl = $("status");
+let landmarker = null, running = false, lastVideoTime = -1;
+
+// ---------- state ----------
+const S = {
+  blinkClosed:false, blinkCount:0, blinkTimes:[],
+  frames:0, onFrames:0, awayTotal:0, awayRun:0, awayMax:0, lastTs:0,
+  fpsT:performance.now(), fpsN:0,
+  recording:false, rows:[],
+  feat:null, // latest feature vector for calibration
+  model:null, // {wx, wy}
+  smooth:{x:null,y:null}
+};
+
+// ---------- helpers ----------
+const deg = r => r*180/Math.PI;
+const fmt = (v,d=1) => (v>=0?"+":"") + v.toFixed(d);
+function bsMap(cats){ const m={}; for(const c of cats) m[c.categoryName]=c.score; return m; }
+function poseFromMatrix(m){ // column-major 4x4
+  const yaw = Math.asin(Math.max(-1,Math.min(1,-m[2])));
+  const pitch = Math.atan2(m[6], m[10]);
+  const roll = Math.atan2(m[1], m[0]);
+  return {yaw:deg(yaw), pitch:deg(pitch), roll:deg(roll)};
+}
+function irisRel(lm, cA, cB, up, lo, iris){
+  const a=lm[cA], b=lm[cB], p=lm[iris], u=lm[up], l=lm[lo];
+  const vx=b.x-a.x, vy=b.y-a.y, len2=vx*vx+vy*vy||1e-6;
+  const x=((p.x-a.x)*vx+(p.y-a.y)*vy)/len2;
+  const y=(p.y-u.y)/((l.y-u.y)||1e-6);
+  return {x,y};
+}
+function dist(p,q,w,h){ return Math.hypot((p.x-q.x)*w,(p.y-q.y)*h); }
+
+// ---------- camera + model ----------
+async function loadModel(){
+  statusEl.textContent = "載入模型中（約 4 MB + WASM）…";
+  const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm");
+  const base = { modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task" };
+  const opts = d => ({ baseOptions:{...base, delegate:d}, runningMode:"VIDEO", numFaces:1,
+    outputFaceBlendshapes:true, outputFacialTransformationMatrixes:true });
+  try { landmarker = await FaceLandmarker.createFromOptions(fileset, opts("GPU")); statusEl.textContent="模型已載入（GPU）"; }
+  catch(e){ console.warn(e); landmarker = await FaceLandmarker.createFromOptions(fileset, opts("CPU")); statusEl.textContent="模型已載入（CPU）"; }
+}
+
+$("btnStart").addEventListener("click", async () => {
+  const btn = $("btnStart"); btn.disabled = true;
+  try{
+    if(!window.isSecureContext) throw new Error("需要 HTTPS 才能使用相機");
+    const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user", width:{ideal:1280}, height:{ideal:960} }, audio:false });
+    video.srcObject = stream; await video.play();
+    $("stageMsg").hidden = true;
+    if(!landmarker) await loadModel();
+    try{ await navigator.wakeLock?.request("screen"); }catch{}
+    running = true; $("badges").hidden = false;
+    ["btnCalib","btnRec"].forEach(id=>$(id).disabled=false);
+    btn.textContent = "鏡頭已開啟";
+    S.lastTs = performance.now();
+    requestAnimationFrame(loop);
+  }catch(e){
+    btn.disabled = false;
+    statusEl.textContent = "無法啟動：" + (e.message||e);
+    $("stageMsg").innerHTML = "無法開啟相機或載入模型。<br>" + (e.message||e);
+  }
+});
+
+// ---------- main loop ----------
+function loop(){
+  if(!running) return;
+  if(video.currentTime !== lastVideoTime && video.readyState >= 2){
+    lastVideoTime = video.currentTime;
+    const now = performance.now();
+    const res = landmarker.detectForVideo(video, now);
+    process(res, now);
+  }
+  requestAnimationFrame(loop);
+}
+
+function process(res, now){
+  const dt = (now - S.lastTs)/1000; S.lastTs = now;
+  // fps
+  S.fpsN++; if(now - S.fpsT > 1000){ $("chipFps").textContent = S.fpsN + " fps"; S.fpsN=0; S.fpsT=now; }
+
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if(canvas.width!==vw){ canvas.width=vw; canvas.height=vh; }
+  ctx.clearRect(0,0,vw,vh);
+
+  const has = res.faceLandmarks && res.faceLandmarks.length>0;
+  S.frames++;
+  const chipFace = $("chipFace");
+  chipFace.textContent = has ? "偵測到臉" : "沒有臉";
+  chipFace.className = "chip " + (has ? "ok" : "bad");
+
+  let row = { t:+(now/1000).toFixed(3), face:has?1:0 };
+  let onScreen = false;
+
+  if(has){
+    const lm = res.faceLandmarks[0];
+    draw(lm, vw, vh);
+
+    const bs = bsMap(res.faceBlendshapes[0].categories);
+    // gaze from blendshapes (+H = user's right, +V = up)
+    const H = ((bs.eyeLookInLeft||0)+(bs.eyeLookOutRight||0))/2 - ((bs.eyeLookOutLeft||0)+(bs.eyeLookInRight||0))/2;
+    const V = ((bs.eyeLookUpLeft||0)+(bs.eyeLookUpRight||0))/2 - ((bs.eyeLookDownLeft||0)+(bs.eyeLookDownRight||0))/2;
+    $("gH").textContent = fmt(H,2); $("gV").textContent = fmt(V,2);
+    const gd = $("gDot");
+    gd.style.left = (50 + Math.max(-1,Math.min(1,H*1.6))*45) + "%";
+    gd.style.top  = (50 - Math.max(-1,Math.min(1,V*1.6))*45) + "%";
+
+    // head pose
+    let pose = {yaw:0,pitch:0,roll:0};
+    if(res.facialTransformationMatrixes?.[0]) pose = poseFromMatrix(res.facialTransformationMatrixes[0].data);
+    $("hYaw").textContent = fmt(pose.yaw)+"°"; $("hPitch").textContent = fmt(pose.pitch)+"°"; $("hRoll").textContent = fmt(pose.roll)+"°";
+
+    // distance via iris diameter (landmarks 469..472 = one iris)
+    const irisPx = (dist(lm[469],lm[471],vw,vh)+dist(lm[474],lm[476],vw,vh))/2;
+    const f = (vw/2)/Math.tan(30*Math.PI/180);
+    const dcm = irisPx>1 ? (f*11.7/irisPx)/10 : 0;
+    $("hDist").textContent = dcm ? dcm.toFixed(0)+" cm" : "—";
+
+    // blink with hysteresis
+    const bl = bs.eyeBlinkLeft||0, br = bs.eyeBlinkRight||0, b = (bl+br)/2;
+    $("bL").style.width = (bl*100)+"%"; $("bR").style.width = (br*100)+"%";
+    $("bLv").textContent = bl.toFixed(2); $("bRv").textContent = br.toFixed(2);
+    if(!S.blinkClosed && b>0.5){ S.blinkClosed=true; S.blinkCount++; S.blinkTimes.push(now); }
+    else if(S.blinkClosed && b<0.35){ S.blinkClosed=false; }
+    S.blinkTimes = S.blinkTimes.filter(t=>now-t<60000);
+    $("blinkN").textContent = S.blinkCount; $("blinkRate").textContent = S.blinkTimes.length + " 次/分";
+
+    // iris relative position (subject's right eye: 33 outer,133 inner; left eye: 362 inner, 263 outer)
+    const rI = irisRel(lm,33,133,159,145,468), lI = irisRel(lm,362,263,386,374,473);
+
+    onScreen = Math.abs(pose.yaw)<20 && Math.abs(pose.pitch)<20 && Math.abs(H)<0.45 && b<0.6;
+
+    // features for screen-gaze regression
+    S.feat = [1, rI.x, rI.y, lI.x, lI.y, H, V, pose.yaw/30, pose.pitch/30, lm[1].x, lm[1].y];
+    if(S.model) showGaze(S.feat);
+
+    // top blendshapes
+    const top = res.faceBlendshapes[0].categories.filter(c=>c.categoryName!=="_neutral")
+      .sort((a,b)=>b.score-a.score).slice(0,10);
+    $("bsList").innerHTML = top.map(c=>`<div class="bar"><span class="mono">${c.categoryName}</span><span class="t"><span class="f" style="width:${(c.score*100).toFixed(0)}%"></span></span><span class="mono">${c.score.toFixed(2)}</span></div>`).join("");
+
+    Object.assign(row, { yaw:+pose.yaw.toFixed(2), pitch:+pose.pitch.toFixed(2), roll:+pose.roll.toFixed(2),
+      gazeH:+H.toFixed(3), gazeV:+V.toFixed(3), blinkL:+bl.toFixed(3), blinkR:+br.toFixed(3),
+      irisRx:+rI.x.toFixed(3), irisRy:+rI.y.toFixed(3), irisLx:+lI.x.toFixed(3), irisLy:+lI.y.toFixed(3),
+      distCm:+dcm.toFixed(1), browDown:+(((bs.browDownLeft||0)+(bs.browDownRight||0))/2).toFixed(3),
+      jawOpen:+(bs.jawOpen||0).toFixed(3) });
+  } else {
+    S.feat = null;
+  }
+
+  // attention accounting
+  if(onScreen){ S.onFrames++; S.awayRun=0; } else { S.awayTotal+=dt; S.awayRun+=dt; S.awayMax=Math.max(S.awayMax,S.awayRun); }
+  $("onPct").textContent = (100*S.onFrames/S.frames).toFixed(0)+"%";
+  $("awayT").textContent = S.awayTotal.toFixed(1)+" s";
+  $("awayMax").textContent = S.awayMax.toFixed(1)+" s";
+  const cs = $("chipScreen");
+  cs.textContent = onScreen ? "朝向螢幕" : "未看螢幕"; cs.className = "chip " + (onScreen?"ok":"warn");
+
+  row.onScreen = onScreen?1:0;
+  if(S.model && S.smooth.x!=null){ row.screenX=Math.round(S.smooth.x); row.screenY=Math.round(S.smooth.y); }
+  if(S.recording){ S.rows.push(row); $("recN").textContent = S.rows.length; }
+
+  // feed calibration sampler
+  if(calib.active && calib.collecting && S.feat) calib.samples.push({f:S.feat.slice(), x:calib.cur.x, y:calib.cur.y});
+}
+
+// ---------- drawing ----------
+const C = FaceLandmarker;
+function drawConn(lm, conns, w, h, color, lw){
+  ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.beginPath();
+  for(const {start,end} of conns){ const a=lm[start], b=lm[end]; ctx.moveTo(a.x*w,a.y*h); ctx.lineTo(b.x*w,b.y*h); }
+  ctx.stroke();
+}
+function draw(lm,w,h){
+  const lw = Math.max(1.5, w/400);
+  drawConn(lm, C.FACE_LANDMARKS_FACE_OVAL, w,h, "rgba(255,255,255,.45)", lw);
+  drawConn(lm, C.FACE_LANDMARKS_LEFT_EYE, w,h, "rgba(79,193,185,.95)", lw);
+  drawConn(lm, C.FACE_LANDMARKS_RIGHT_EYE, w,h, "rgba(79,193,185,.95)", lw);
+  drawConn(lm, C.FACE_LANDMARKS_LEFT_EYEBROW, w,h, "rgba(255,255,255,.6)", lw);
+  drawConn(lm, C.FACE_LANDMARKS_RIGHT_EYEBROW, w,h, "rgba(255,255,255,.6)", lw);
+  drawConn(lm, C.FACE_LANDMARKS_LIPS, w,h, "rgba(255,255,255,.5)", lw);
+  drawConn(lm, C.FACE_LANDMARKS_LEFT_IRIS, w,h, "#FF7A3D", lw*1.4);
+  drawConn(lm, C.FACE_LANDMARKS_RIGHT_IRIS, w,h, "#FF7A3D", lw*1.4);
+  ctx.fillStyle="#FF7A3D";
+  for(const i of [468,473]){ ctx.beginPath(); ctx.arc(lm[i].x*w, lm[i].y*h, lw*2, 0, Math.PI*2); ctx.fill(); }
+}
+
+// ---------- ridge regression ----------
+function solve(A,b){ // Gaussian elimination
+  const n=A.length, M=A.map((r,i)=>[...r,b[i]]);
+  for(let c=0;c<n;c++){
+    let p=c; for(let r=c+1;r<n;r++) if(Math.abs(M[r][c])>Math.abs(M[p][c])) p=r;
+    [M[c],M[p]]=[M[p],M[c]];
+    const d=M[c][c]||1e-9;
+    for(let r=0;r<n;r++){ if(r===c) continue; const k=M[r][c]/d; for(let k2=c;k2<=n;k2++) M[r][k2]-=k*M[c][k2]; }
+  }
+  return M.map((r,i)=>r[n]/(r[i]||1e-9));
+}
+function ridge(X,y,lambda){
+  const d=X[0].length, A=Array.from({length:d},()=>Array(d).fill(0)), b=Array(d).fill(0);
+  for(let i=0;i<X.length;i++){ const x=X[i]; for(let r=0;r<d;r++){ b[r]+=x[r]*y[i]; for(let c=0;c<d;c++) A[r][c]+=x[r]*x[c]; } }
+  for(let r=1;r<d;r++) A[r][r]+=lambda;
+  return solve(A,b);
+}
+const dot = (w,f) => w.reduce((s,wi,i)=>s+wi*f[i],0);
+function showGaze(f){
+  const W=innerWidth, H=innerHeight;
+  let x=dot(S.model.wx,f)*W, y=dot(S.model.wy,f)*H;
+  const a=0.25;
+  S.smooth.x = S.smooth.x==null ? x : S.smooth.x+(x-S.smooth.x)*a;
+  S.smooth.y = S.smooth.y==null ? y : S.smooth.y+(y-S.smooth.y)*a;
+  const g=$("gazeDot"); g.hidden=false;
+  g.style.left = Math.max(0,Math.min(W,S.smooth.x))+"px";
+  g.style.top  = Math.max(0,Math.min(H,S.smooth.y))+"px";
+}
+
+// ---------- calibration ----------
+const calib = { active:false, collecting:false, samples:[], cur:null };
+const PTS = [[.1,.1],[.5,.1],[.9,.1],[.1,.5],[.5,.5],[.9,.5],[.1,.9],[.5,.9],[.9,.9]];
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+$("btnCalib").addEventListener("click", ()=>{ $("calib").hidden=false; $("calibInfo").hidden=false; $("gazeDot").hidden=true; });
+$("calibCancel").addEventListener("click", ()=>{ $("calib").hidden=true; });
+$("calibGo").addEventListener("click", async ()=>{
+  $("calibInfo").hidden=true;
+  calib.active=true; calib.samples=[];
+  const box=$("calib");
+  for(const [px,py] of PTS){
+    const el=document.createElement("div"); el.className="pt";
+    el.style.left=(px*100)+"%"; el.style.top=(py*100)+"%"; box.appendChild(el);
+    calib.cur={x:px,y:py};
+    await sleep(600); calib.collecting=true; await sleep(900); calib.collecting=false;
+    el.remove();
+  }
+  calib.active=false; box.hidden=true;
+  if(calib.samples.length<30){ statusEl.textContent="校準樣本太少（"+calib.samples.length+"），請確認臉在畫面中再試一次"; return; }
+  const X=calib.samples.map(s=>s.f);
+  S.model={ wx:ridge(X,calib.samples.map(s=>s.x),0.01), wy:ridge(X,calib.samples.map(s=>s.y),0.01) };
+  // training error in px
+  const W=innerWidth,H=innerHeight;
+  const err = calib.samples.reduce((s,k)=>s+Math.hypot((dot(S.model.wx,k.f)-k.x)*W,(dot(S.model.wy,k.f)-k.y)*H),0)/calib.samples.length;
+  S.smooth={x:null,y:null};
+  statusEl.textContent = `校準完成：${calib.samples.length} 個樣本，訓練誤差約 ${err.toFixed(0)} px。橘色圓圈是推估的視線落點。`;
+});
+
+// ---------- recording ----------
+$("btnRec").addEventListener("click", ()=>{
+  S.recording=!S.recording;
+  const b=$("btnRec");
+  if(S.recording){ S.rows=[]; b.textContent="停止記錄"; b.classList.add("rec"); $("btnCsv").disabled=true; }
+  else { b.textContent="開始記錄"; b.classList.remove("rec"); $("btnCsv").disabled=S.rows.length===0; }
+});
+$("btnCsv").addEventListener("click", ()=>{
+  const cols=["t","face","onScreen","yaw","pitch","roll","gazeH","gazeV","blinkL","blinkR","irisRx","irisRy","irisLx","irisLy","distCm","browDown","jawOpen","screenX","screenY"];
+  const csv=[cols.join(",")].concat(S.rows.map(r=>cols.map(c=>r[c]??"").join(","))).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="gaze_probe_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
+  a.click();
+});
+</script>
+</body>
+</html>
