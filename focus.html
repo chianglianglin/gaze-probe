@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Focus Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1EF; --panel:#FFFFFF; --ink:#15201D; --muted:#5B6B66; --line:#D3DBD8;
+  --accent:#D9480F; --on:#2F8F4E; --off:#C0392B; --blink:#8A9A95;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0E1312; --panel:#161D1B; --ink:#E4ECE9; --muted:#8FA19B; --line:#27322F;
+    --accent:#FF7A3D; --on:#5CC27E; --off:#EF6F61; --blink:#6B7B76; color-scheme:dark; }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.6 "IBM Plex Sans TC",system-ui,-apple-system,"Noto Sans TC",sans-serif}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:980px;margin:0 auto;padding-inline:16px;
+  padding-block:calc(env(safe-area-inset-top,0px) + 12px) calc(env(safe-area-inset-bottom,0px) + 24px)}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+h1{font-size:18px;margin:0} h1 small{display:block;font-size:12px;color:var(--muted);font-weight:400}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+  padding:8px 14px;border-radius:8px;cursor:pointer;min-height:42px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px}
+@media (max-width:720px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h2{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 8px;letter-spacing:.06em}
+.state{display:flex;align-items:center;gap:12px}
+.lamp{width:22px;height:22px;border-radius:50%;background:var(--blink);flex:none;transition:background .15s}
+.lamp.on{background:var(--on)} .lamp.off{background:var(--off)}
+.stateText{font-size:26px;font-weight:600}
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:14px;margin-top:10px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;text-align:right}
+.big{font-size:30px;font-weight:600}
+#timeline{width:100%;height:28px;display:block;border-radius:6px;background:color-mix(in srgb,var(--line) 60%,transparent);margin-top:8px}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--muted);margin-top:4px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.reading{max-width:62ch}
+.reading h3{margin:0 0 6px;font-size:17px}
+.reading p{margin:0 0 10px}
+.cam{position:relative;background:#0F1513;border-radius:8px;overflow:hidden;aspect-ratio:4/3;width:100%}
+.cam video,.cam canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.status{font-size:12px;color:var(--muted);margin:8px 0 0;min-height:1.4em}
+.note{font-size:12px;color:var(--muted);margin:6px 0 0}
+/* calibration overlay */
+#calib{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+#calib .box{max-width:560px}
+#calib .step{font-size:14px;color:var(--muted)}
+#calib .instr{font-size:28px;font-weight:600;margin:8px 0}
+#calib .count{font-size:48px;font-weight:600;color:var(--accent)}
+#calib .pt{position:fixed;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 7px color-mix(in srgb,var(--accent) 25%,transparent);transition:left .9s ease,top .9s ease}
+#calib .pt::after{content:"";position:absolute;inset:11px;border-radius:50%;background:#fff}
+@media (prefers-reduced-motion:reduce){#calib .pt{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Focus Probe<small>偵測眼睛是否停在螢幕上 · 影像只在本機處理</small></h1>
+    <div class="btns">
+      <button id="btnStart" class="primary">1. 開啟鏡頭</button>
+      <button id="btnCalib" disabled>2. 個人校準（15 秒）</button>
+      <button id="btnReset" disabled>重置統計</button>
+      <button id="btnCsv" disabled>匯出 CSV</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <div class="state">
+        <div class="lamp" id="lamp"></div>
+        <div>
+          <div class="stateText" id="stateText">尚未開始</div>
+          <div class="note" id="stateSub">開啟鏡頭後，把裝置放在平常使用的位置，再做個人校準</div>
+        </div>
+      </div>
+      <canvas id="timeline" height="28"></canvas>
+      <div class="legend"><span><i style="background:var(--on)"></i>看螢幕</span><span><i style="background:var(--off)"></i>沒看螢幕</span><span><i style="background:var(--blink)"></i>沒偵測到臉</span><span class="mono" id="tlSpan">最近 2 分鐘</span></div>
+
+      <div class="reading" style="margin-top:16px">
+        <h3>測試用閱讀材料</h3>
+        <p>光合作用是植物把光能轉成化學能的過程。葉綠體中的葉綠素吸收光線，把水分解成氧氣和氫，再把二氧化碳固定成葡萄糖。這個過程分成兩個階段：需要光的光反應，以及不直接需要光的卡爾文循環。</p>
+        <p>光反應發生在類囊體膜上，產生 ATP 與 NADPH；卡爾文循環發生在基質中，利用這些能量把二氧化碳轉成三碳糖。影響光合作用速率的主要因素有光照強度、二氧化碳濃度和溫度。</p>
+        <p>試著一邊讀這段文字，一邊偶爾低頭看筆記本、抬頭看前方，觀察上方狀態的變化。</p>
+      </div>
+    </div>
+
+    <div style="display:grid;gap:12px;align-content:start">
+      <div class="card">
+        <h2>專注統計</h2>
+        <dl class="kv mono">
+          <dt>看螢幕比例</dt><dd class="big" id="pct">—</dd>
+          <dt>計時</dt><dd id="elapsed">0:00</dd>
+          <dt>離開次數（&gt;2 秒）</dt><dd id="awayN">0</dd>
+          <dt>最長離開</dt><dd id="awayMax">0.0 s</dd>
+          <dt>目前這段</dt><dd id="curRun">—</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2>鏡頭</h2>
+        <div class="cam"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
+        <dl class="kv mono" style="font-size:12px">
+          <dt>與「看螢幕」的距離</dt><dd id="dist">—</dd>
+          <dt>門檻</dt><dd id="thr">—</dd>
+          <dt>fps</dt><dd id="fps">—</dd>
+        </dl>
+        <p class="status mono" id="status">模型尚未載入</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="calib" hidden><div class="box">
+  <div class="step" id="cStep"></div>
+  <div class="instr" id="cInstr"></div>
+  <div class="count" id="cCount"></div>
+  <p class="note" id="cNote"></p>
+  <div class="btns" style="justify-content:center;margin-top:12px" id="cBtns">
+    <button id="cGo" class="primary">開始校準</button><button id="cCancel">取消</button>
+  </div>
+</div><div class="pt" id="cPt" hidden></div></div>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
+
+const $ = id => document.getElementById(id);
+const video=$("video"), canvas=$("overlay"), ctx=canvas.getContext("2d"), statusEl=$("status");
+let landmarker=null, running=false, lastVT=-1;
+
+// ---------------- features ----------------
+// f = [pitch, yaw, roll, gazeH, gazeV, lookDown, lid, irisY, faceY, faceX]
+const FEAT_N = 10;
+function poseFromMatrix(m){
+  const d=180/Math.PI;
+  return { yaw:Math.asin(Math.max(-1,Math.min(1,-m[2])))*d, pitch:Math.atan2(m[6],m[10])*d, roll:Math.atan2(m[1],m[0])*d };
+}
+function bsMap(c){ const m={}; for(const x of c) m[x.categoryName]=x.score; return m; }
+function extract(res){
+  const lm=res.faceLandmarks[0], bs=bsMap(res.faceBlendshapes[0].categories);
+  const p = res.facialTransformationMatrixes?.[0] ? poseFromMatrix(res.facialTransformationMatrixes[0].data) : {yaw:0,pitch:0,roll:0};
+  const gH=((bs.eyeLookInLeft||0)+(bs.eyeLookOutRight||0))/2-((bs.eyeLookOutLeft||0)+(bs.eyeLookInRight||0))/2;
+  const gV=((bs.eyeLookUpLeft||0)+(bs.eyeLookUpRight||0))/2-((bs.eyeLookDownLeft||0)+(bs.eyeLookDownRight||0))/2;
+  const down=((bs.eyeLookDownLeft||0)+(bs.eyeLookDownRight||0))/2;
+  const lid=((bs.eyeBlinkLeft||0)+(bs.eyeBlinkRight||0))/2;
+  // iris vertical position relative to eye corners' midline, normalised by eye width (stable during partial lid closure)
+  const iy=(c1,c2,ir)=>{ const a=lm[c1],b=lm[c2],i=lm[ir]; const w=Math.hypot(b.x-a.x,b.y-a.y)||1e-6; return (i.y-(a.y+b.y)/2)/w; };
+  const irisY=(iy(33,133,468)+iy(362,263,473))/2;
+  const faceY=lm[1].y, faceX=lm[1].x;
+  return { f:[p.pitch/10,p.yaw/10,p.roll/10,gH*3,gV*3,down*3,lid*3,irisY*10,faceY*5,faceX*5], lid, pose:p };
+}
+
+// ---------------- model: Mahalanobis distance to "screen" cluster ----------------
+let model=null; // {mu, inv, thr, lidBlink}
+function meanVec(X){ const m=Array(FEAT_N).fill(0); for(const x of X) for(let i=0;i<FEAT_N;i++) m[i]+=x[i]; return m.map(v=>v/X.length); }
+function cov(X,mu,ridge){
+  const C=Array.from({length:FEAT_N},()=>Array(FEAT_N).fill(0));
+  for(const x of X) for(let i=0;i<FEAT_N;i++) for(let j=0;j<FEAT_N;j++) C[i][j]+=(x[i]-mu[i])*(x[j]-mu[j]);
+  for(let i=0;i<FEAT_N;i++){ for(let j=0;j<FEAT_N;j++) C[i][j]/=Math.max(1,X.length-1); C[i][i]+=ridge; }
+  return C;
+}
+function invert(A){
+  const n=A.length, M=A.map((r,i)=>[...r,...Array.from({length:n},(_,j)=>i===j?1:0)]);
+  for(let c=0;c<n;c++){
+    let p=c; for(let r=c+1;r<n;r++) if(Math.abs(M[r][c])>Math.abs(M[p][c])) p=r;
+    [M[c],M[p]]=[M[p],M[c]]; const d=M[c][c]||1e-9;
+    for(let k=0;k<2*n;k++) M[c][k]/=d;
+    for(let r=0;r<n;r++){ if(r===c) continue; const f=M[r][c]; if(!f) continue; for(let k=0;k<2*n;k++) M[r][k]-=f*M[c][k]; }
+  }
+  return M.map(r=>r.slice(n));
+}
+function mdist(x){
+  const d=x.map((v,i)=>v-model.mu[i]); let s=0;
+  for(let i=0;i<FEAT_N;i++){ let t=0; for(let j=0;j<FEAT_N;j++) t+=model.inv[i][j]*d[j]; s+=d[i]*t; }
+  return Math.sqrt(Math.max(0,s)/FEAT_N);
+}
+function train(screen, away, lidBase){
+  const mu=meanVec(screen);
+  model={ mu, inv:invert(cov(screen,mu,0.05)), thr:1, lidBlink: lidBase+0.3 };
+  const ds=screen.map(mdist).sort((a,b)=>a-b), da=away.map(mdist).sort((a,b)=>a-b);
+  // choose threshold maximising balanced accuracy
+  let best={t:ds[Math.floor(ds.length*0.95)]*1.2, acc:0};
+  const cands=[...ds,...da].sort((a,b)=>a-b);
+  for(const t of cands){
+    const tp=ds.filter(v=>v<=t).length/ds.length, tn=da.length? da.filter(v=>v>t).length/da.length : 0;
+    const acc=(tp+tn)/2; if(acc>best.acc){ best={t,acc}; }
+  }
+  model.thr=best.t; model.acc=best.acc;
+  return best.acc;
+}
+
+// ---------------- runtime state ----------------
+const T = { start:null, onMs:0, totalMs:0, awayN:0, awayMax:0, runStart:null, state:null, rawState:null, rawSince:0,
+  last:0, hist:[], rows:[], fpsN:0, fpsT:0, blinkHold:0 };
+const HOLD_MS=500; // state must persist 0.5 s before switching
+function setState(s, now){
+  if(T.state===s) return;
+  if(T.state==="off" && T.runStart!=null){
+    const dur=(now-T.runStart)/1000; if(dur>2) T.awayN++; T.awayMax=Math.max(T.awayMax,dur);
+  }
+  T.state=s; T.runStart=now;
+  const lamp=$("lamp"); lamp.className="lamp "+(s==="on"?"on":s==="off"?"off":"");
+  $("stateText").textContent = s==="on"?"看螢幕":s==="off"?"沒看螢幕":"沒偵測到臉";
+}
+
+// ---------------- camera + model ----------------
+async function loadModel(){
+  statusEl.textContent="載入模型中…";
+  const fs=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm");
+  const o=d=>({baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",delegate:d},
+    runningMode:"VIDEO",numFaces:1,outputFaceBlendshapes:true,outputFacialTransformationMatrixes:true});
+  try{ landmarker=await FaceLandmarker.createFromOptions(fs,o("GPU")); statusEl.textContent="模型已載入（GPU）"; }
+  catch(e){ console.warn(e); landmarker=await FaceLandmarker.createFromOptions(fs,o("CPU")); statusEl.textContent="模型已載入（CPU）"; }
+}
+$("btnStart").addEventListener("click", async ()=>{
+  const b=$("btnStart"); b.disabled=true;
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false});
+    video.srcObject=s; await video.play();
+    if(!landmarker) await loadModel();
+    try{ await navigator.wakeLock?.request("screen"); }catch{}
+    running=true; b.textContent="鏡頭已開啟"; $("btnCalib").disabled=false;
+    $("stateText").textContent="請做個人校準"; $("stateSub").textContent="把裝置放好（桌上或手上都可以），按「個人校準」";
+    requestAnimationFrame(loop);
+  }catch(e){ b.disabled=false; statusEl.textContent="無法啟動："+(e.message||e); }
+});
+
+let latest=null; // latest extracted features (for calibration)
+function loop(){
+  if(!running) return;
+  if(video.readyState>=2 && video.currentTime!==lastVT){
+    lastVT=video.currentTime;
+    const now=performance.now();
+    const res=landmarker.detectForVideo(video,now);
+    frame(res,now);
+  }
+  requestAnimationFrame(loop);
+}
+
+function frame(res, now){
+  T.fpsN++; if(now-T.fpsT>1000){ $("fps").textContent=T.fpsN; T.fpsN=0; T.fpsT=now; }
+  const w=video.videoWidth,h=video.videoHeight; if(canvas.width!==w){canvas.width=w;canvas.height=h;}
+  ctx.clearRect(0,0,w,h);
+  const has=res.faceLandmarks?.length>0;
+  latest = has ? extract(res) : null;
+  if(has) drawEyes(res.faceLandmarks[0],w,h);
+  if(calib.collecting) calib.push(latest);
+  if(!model || calib.active) return;
+
+  // classify
+  let raw, d=null;
+  if(!latest) raw="none";
+  else {
+    d=mdist(latest.f);
+    const blinking = latest.lid > model.lidBlink;
+    if(blinking){ T.blinkHold=now; }
+    // during a blink (and 250 ms after), keep previous raw decision
+    if(blinking || now-T.blinkHold<250) raw = T.rawState ?? "on";
+    else raw = d<=model.thr ? "on" : "off";
+    $("dist").textContent=d.toFixed(2);
+  }
+  if(raw!==T.rawState){ T.rawState=raw; T.rawSince=now; }
+  if(T.state===null) setState(raw,now);
+  else if(raw!==T.state && now-T.rawSince>=HOLD_MS) setState(raw,now);
+
+  // accounting
+  const dt = T.last ? now-T.last : 0; T.last=now;
+  if(T.start==null) T.start=now;
+  T.totalMs+=dt; if(T.state==="on") T.onMs+=dt;
+  T.hist.push({t:now,s:T.state}); while(T.hist.length && now-T.hist[0].t>120000) T.hist.shift();
+  T.rows.push({t:((now-T.start)/1000).toFixed(2), state:T.state, raw, dist:d==null?"":d.toFixed(3),
+    pitch:latest?latest.pose.pitch.toFixed(1):"", yaw:latest?latest.pose.yaw.toFixed(1):"", lid:latest?latest.lid.toFixed(3):""});
+  if(T.rows.length===1) $("btnCsv").disabled=false;
+  render(now);
+}
+
+function render(now){
+  $("pct").textContent = T.totalMs? Math.round(100*T.onMs/T.totalMs)+"%" : "—";
+  const s=Math.floor(T.totalMs/1000); $("elapsed").textContent=Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+  $("awayN").textContent=T.awayN; $("awayMax").textContent=T.awayMax.toFixed(1)+" s";
+  $("curRun").textContent = T.runStart? ((now-T.runStart)/1000).toFixed(1)+" s" : "—";
+  // timeline
+  const tl=$("timeline"), W=tl.clientWidth; if(tl.width!==W) tl.width=W;
+  const c=tl.getContext("2d"); c.clearRect(0,0,W,28);
+  const css=getComputedStyle(document.documentElement);
+  const col={on:css.getPropertyValue("--on"),off:css.getPropertyValue("--off"),none:css.getPropertyValue("--blink")};
+  for(let i=0;i<T.hist.length;i++){
+    const a=T.hist[i], b=T.hist[i+1]||{t:now};
+    const x0=W-(now-a.t)/120000*W, x1=W-(now-b.t)/120000*W;
+    c.fillStyle=col[a.s]||col.none; c.fillRect(x0,0,Math.max(1,x1-x0+0.5),28);
+  }
+}
+
+function drawEyes(lm,w,h){
+  const lw=Math.max(1.5,w/320);
+  const seg=(conns,color)=>{ ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.beginPath();
+    for(const {start,end} of conns){ ctx.moveTo(lm[start].x*w,lm[start].y*h); ctx.lineTo(lm[end].x*w,lm[end].y*h);} ctx.stroke(); };
+  seg(FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,"rgba(255,255,255,.35)");
+  seg(FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,"rgba(79,193,185,.9)"); seg(FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,"rgba(79,193,185,.9)");
+  seg(FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS,"#FF7A3D"); seg(FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS,"#FF7A3D");
+}
+
+// ---------------- calibration (with voice prompts, since the user looks away from the screen) ----------------
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function say(text){
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang="zh-TW"; u.rate=1.05; speechSynthesis.speak(u);}catch{}
+}
+let actx=null;
+function beep(f=880,ms=120){ try{ actx ||= new AudioContext(); const o=actx.createOscillator(), g=actx.createGain();
+  o.frequency.value=f; g.gain.value=0.15; o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+ms/1000);}catch{} }
+const calib={ active:false, collecting:false, buf:[], push(x){ if(x) this.buf.push(x); } };
+async function collect(ms){ calib.buf=[]; calib.collecting=true; await sleep(ms); calib.collecting=false; return calib.buf.slice(); }
+async function countdown(sec){ for(let i=sec;i>0;i--){ $("cCount").textContent=i; await sleep(1000);} $("cCount").textContent=""; }
+
+$("btnCalib").addEventListener("click",()=>{
+  $("calib").hidden=false; $("cBtns").hidden=false; $("cPt").hidden=true;
+  $("cStep").textContent="個人校準 · 約 15 秒";
+  $("cInstr").textContent="先把裝置放在平常使用的位置";
+  $("cCount").textContent="";
+  $("cNote").textContent="第 1 段：眼睛跟著橘點看螢幕。第 2 段：依語音提示看筆記本、前方、左右（聽聲音就好，不用看螢幕）。請開啟聲音。";
+});
+$("cCancel").addEventListener("click",()=>{ $("calib").hidden=true; });
+$("cGo").addEventListener("click", async ()=>{
+  $("cBtns").hidden=true; calib.active=true;
+  say("開始校準。請看著螢幕上的橘色圓點。");
+  // --- phase 1: screen (dot tours the screen so every screen region is covered)
+  $("cStep").textContent="第 1 段 / 2"; $("cInstr").textContent="看著橘點"; $("cNote").textContent="頭自然就好，像平常看螢幕一樣";
+  await sleep(1800);
+  const pt=$("cPt"); pt.hidden=false;
+  const tour=[[.5,.5],[.15,.15],[.85,.15],[.85,.5],[.15,.5],[.15,.85],[.85,.85],[.5,.5]];
+  const screen=[];
+  for(const [x,y] of tour){ pt.style.left=x*100+"%"; pt.style.top=y*100+"%"; await sleep(500); screen.push(...await collect(500)); }
+  pt.hidden=true;
+  // --- phase 2: away (voice-guided)
+  $("cStep").textContent="第 2 段 / 2"; $("cInstr").textContent="依語音提示看別的地方"; $("cNote").textContent="聽到「嗶」聲就回來看螢幕";
+  const away=[];
+  const targets=[["低頭看桌上的筆記本",3000],["抬頭看正前方，像在看老師或白板",2500],["看左邊",1500],["看右邊",1500]];
+  for(const [txt,ms] of targets){
+    $("cInstr").textContent=txt; say(txt); await sleep(1600);
+    away.push(...await collect(ms));
+  }
+  beep(); say("好，請看回螢幕。");
+  $("cInstr").textContent="計算中…"; await sleep(600);
+  calib.active=false; $("calib").hidden=true;
+  if(screen.length<20){ statusEl.textContent=`看螢幕樣本太少（${screen.length}），請確認臉在鏡頭內再校準一次`; return; }
+  const lidBase=screen.reduce((s,x)=>s+x.lid,0)/screen.length;
+  const acc=train(screen.map(x=>x.f), away.map(x=>x.f), lidBase);
+  $("thr").textContent=model.thr.toFixed(2);
+  statusEl.textContent=`校準完成：看螢幕 ${screen.length} 格、看別處 ${away.length} 格，區分準確度 ${(acc*100).toFixed(0)}%`;
+  $("stateSub").textContent= acc<0.8 ? "區分準確度偏低：試著把裝置擺穩、讓臉完整入鏡後重新校準" : "開始閱讀下方文字，狀態會即時更新";
+  resetStats(); $("btnReset").disabled=false;
+});
+
+function resetStats(){ Object.assign(T,{start:null,onMs:0,totalMs:0,awayN:0,awayMax:0,runStart:null,state:null,rawState:null,last:0,hist:[],rows:[]}); }
+$("btnReset").addEventListener("click",resetStats);
+
+// ---------------- export ----------------
+$("btnCsv").addEventListener("click", async ()=>{
+  const cols=["t","state","raw","dist","pitch","yaw","lid"];
+  const csv=[cols.join(",")].concat(T.rows.map(r=>cols.map(c=>r[c]??"").join(","))).join("\n");
+  const name="focus_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
+  const file=new File([csv],name,{type:"text/csv"});
+  try{ if(navigator.canShare?.({files:[file]})){ await navigator.share({files:[file],title:name}); return; } }catch(e){ if(e.name==="AbortError") return; }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(file); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),3000);
+});
+</script>
+</body>
+</html>
