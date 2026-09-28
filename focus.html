@@ -71,7 +71,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     <h1>Focus Probe<small>偵測眼睛是否停在螢幕上 · 影像只在本機處理</small></h1>
     <div class="btns">
       <button id="btnStart" class="primary">1. 開啟鏡頭</button>
-      <button id="btnCalib" disabled>2. 個人校準（15 秒）</button>
+      <button id="btnCalib" disabled>2. 個人校準（25 秒）</button>
       <button id="btnReset" disabled>重置統計</button>
       <button id="btnCsv" disabled>匯出 CSV</button>
     </div>
@@ -112,7 +112,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
         <h2>鏡頭</h2>
         <div class="cam"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
         <dl class="kv mono" style="font-size:12px">
-          <dt>與「看螢幕」的距離</dt><dd id="dist">—</dd>
+          <dt>分數（≤門檻＝看螢幕）</dt><dd id="dist">—</dd>
           <dt>門檻</dt><dd id="thr">—</dd>
           <dt>fps</dt><dd id="fps">—</dd>
         </dl>
@@ -161,15 +161,11 @@ function extract(res){
   return { f:[p.pitch/10,p.yaw/10,p.roll/10,gH*3,gV*3,down*3,lid*3,irisY*10,faceY*5,faceX*5], lid, pose:p };
 }
 
-// ---------------- model: Mahalanobis distance to "screen" cluster ----------------
-let model=null; // {mu, inv, thr, lidBlink}
+// ---------------- model: nearest-class Mahalanobis (screen vs each "away" target) ----------------
+// v2: decide by comparing distance-to-screen with distance-to-nearest-away-class, pooled covariance,
+// online adaptation from touches/scrolls (touching the screen = looking at it).
+let model=null; // {S:[...], A:{name:[...]}, muS, muA:{}, inv, margin, lidBlink}
 function meanVec(X){ const m=Array(FEAT_N).fill(0); for(const x of X) for(let i=0;i<FEAT_N;i++) m[i]+=x[i]; return m.map(v=>v/X.length); }
-function cov(X,mu,ridge){
-  const C=Array.from({length:FEAT_N},()=>Array(FEAT_N).fill(0));
-  for(const x of X) for(let i=0;i<FEAT_N;i++) for(let j=0;j<FEAT_N;j++) C[i][j]+=(x[i]-mu[i])*(x[j]-mu[j]);
-  for(let i=0;i<FEAT_N;i++){ for(let j=0;j<FEAT_N;j++) C[i][j]/=Math.max(1,X.length-1); C[i][i]+=ridge; }
-  return C;
-}
 function invert(A){
   const n=A.length, M=A.map((r,i)=>[...r,...Array.from({length:n},(_,j)=>i===j?1:0)]);
   for(let c=0;c<n;c++){
@@ -180,24 +176,46 @@ function invert(A){
   }
   return M.map(r=>r.slice(n));
 }
-function mdist(x){
-  const d=x.map((v,i)=>v-model.mu[i]); let s=0;
+function md(x,mu){
+  const d=x.map((v,i)=>v-mu[i]); let s=0;
   for(let i=0;i<FEAT_N;i++){ let t=0; for(let j=0;j<FEAT_N;j++) t+=model.inv[i][j]*d[j]; s+=d[i]*t; }
   return Math.sqrt(Math.max(0,s)/FEAT_N);
 }
-function train(screen, away, lidBase){
-  const mu=meanVec(screen);
-  model={ mu, inv:invert(cov(screen,mu,0.05)), thr:1, lidBlink: lidBase+0.3 };
-  const ds=screen.map(mdist).sort((a,b)=>a-b), da=away.map(mdist).sort((a,b)=>a-b);
-  // choose threshold maximising balanced accuracy
-  let best={t:ds[Math.floor(ds.length*0.95)]*1.2, acc:0};
-  const cands=[...ds,...da].sort((a,b)=>a-b);
-  for(const t of cands){
-    const tp=ds.filter(v=>v<=t).length/ds.length, tn=da.length? da.filter(v=>v>t).length/da.length : 0;
-    const acc=(tp+tn)/2; if(acc>best.acc){ best={t,acc}; }
+function fit(){
+  model.muS=meanVec(model.S); model.muA={};
+  const groups=[[model.S,model.muS]];
+  for(const k in model.A){ if(model.A[k].length>=5){ model.muA[k]=meanVec(model.A[k]); groups.push([model.A[k],model.muA[k]]); } }
+  const C=Array.from({length:FEAT_N},()=>Array(FEAT_N).fill(0)); let n=0;
+  for(const [X,mu] of groups) for(const x of X){ n++; for(let i=0;i<FEAT_N;i++) for(let j=0;j<FEAT_N;j++) C[i][j]+=(x[i]-mu[i])*(x[j]-mu[j]); }
+  for(let i=0;i<FEAT_N;i++){ for(let j=0;j<FEAT_N;j++) C[i][j]/=Math.max(1,n-groups.length); C[i][i]+=0.15; }
+  model.inv=invert(C);
+}
+function score(x){ // negative = closer to screen than to any away class
+  const dS=md(x,model.muS); let dA=Infinity, near="";
+  for(const k in model.muA){ const v=md(x,model.muA[k]); if(v<dA){dA=v;near=k;} }
+  return { dS, dA, near, s: dS - (isFinite(dA)?dA:dS*0+3) };
+}
+function train(screen, awayByTarget, lidBase){
+  model={ S:screen.slice(), A:awayByTarget, margin:0, lidBlink: lidBase+0.3, calibN:screen.length };
+  fit();
+  const ss=screen.map(x=>score(x).s), sa=Object.values(awayByTarget).flat().map(x=>score(x).s);
+  // margin: maximise balanced accuracy, then shift half-way toward the away side (prefer "on" when unsure)
+  let best={m:0,acc:0};
+  for(const m of [...ss,...sa].sort((a,b)=>a-b)){
+    const tp=ss.filter(v=>v<=m).length/ss.length, tn=sa.length?sa.filter(v=>v>m).length/sa.length:1;
+    if((tp+tn)/2>best.acc) best={m,acc:(tp+tn)/2};
   }
-  model.thr=best.t; model.acc=best.acc;
+  const saSorted=sa.slice().sort((a,b)=>a-b), aLow=saSorted[Math.floor(saSorted.length*0.1)] ?? best.m+1;
+  model.margin=Math.max(best.m,(best.m+aLow)/2);
   return best.acc;
+}
+// online adaptation
+let touchUntil=0, lastRefit=0;
+["pointerdown","wheel","scroll","keydown","touchmove"].forEach(ev=>addEventListener(ev,()=>{ touchUntil=performance.now()+1500; },{passive:true,capture:true}));
+function adapt(x, now){
+  model.S.push(x);
+  if(model.S.length>900) model.S.splice(model.calibN, model.S.length-900); // keep calibration samples, drop oldest adapted ones
+  if(now-lastRefit>2000){ fit(); lastRefit=now; }
 }
 
 // ---------------- runtime state ----------------
@@ -259,16 +277,17 @@ function frame(res, now){
   if(!model || calib.active) return;
 
   // classify
-  let raw, d=null;
+  let raw, d=null, sc=null;
   if(!latest) raw="none";
   else {
-    d=mdist(latest.f);
+    sc=score(latest.f); d=sc.s;
     const blinking = latest.lid > model.lidBlink;
     if(blinking){ T.blinkHold=now; }
-    // during a blink (and 250 ms after), keep previous raw decision
-    if(blinking || now-T.blinkHold<250) raw = T.rawState ?? "on";
-    else raw = d<=model.thr ? "on" : "off";
-    $("dist").textContent=d.toFixed(2);
+    const touching = now < touchUntil;
+    if(touching){ raw="on"; if(!blinking) adapt(latest.f, now); }
+    else if(blinking || now-T.blinkHold<250) raw = T.rawState ?? "on";
+    else raw = d<=model.margin ? "on" : "off";
+    $("dist").textContent=`${d.toFixed(2)} (${sc.near||"-"})${touching?" 觸控":""}`;
   }
   if(raw!==T.rawState){ T.rawState=raw; T.rawSince=now; }
   if(T.state===null) setState(raw,now);
@@ -279,8 +298,11 @@ function frame(res, now){
   if(T.start==null) T.start=now;
   T.totalMs+=dt; if(T.state==="on") T.onMs+=dt;
   T.hist.push({t:now,s:T.state}); while(T.hist.length && now-T.hist[0].t>120000) T.hist.shift();
-  T.rows.push({t:((now-T.start)/1000).toFixed(2), state:T.state, raw, dist:d==null?"":d.toFixed(3),
-    pitch:latest?latest.pose.pitch.toFixed(1):"", yaw:latest?latest.pose.yaw.toFixed(1):"", lid:latest?latest.lid.toFixed(3):""});
+  const row={t:((now-T.start)/1000).toFixed(2), state:T.state, raw, score:d==null?"":d.toFixed(3),
+    dS:sc?sc.dS.toFixed(3):"", near:sc?sc.near:"", touch:now<touchUntil?1:0,
+    pitch:latest?latest.pose.pitch.toFixed(1):"", yaw:latest?latest.pose.yaw.toFixed(1):"", lid:latest?latest.lid.toFixed(3):""};
+  if(latest) latest.f.forEach((v,i)=>row["f"+i]=v.toFixed(3));
+  T.rows.push(row);
   if(T.rows.length===1) $("btnCsv").disabled=false;
   render(now);
 }
@@ -325,10 +347,10 @@ async function countdown(sec){ for(let i=sec;i>0;i--){ $("cCount").textContent=i
 
 $("btnCalib").addEventListener("click",()=>{
   $("calib").hidden=false; $("cBtns").hidden=false; $("cPt").hidden=true;
-  $("cStep").textContent="個人校準 · 約 15 秒";
+  $("cStep").textContent="個人校準 · 約 25 秒";
   $("cInstr").textContent="先把裝置放在平常使用的位置";
   $("cCount").textContent="";
-  $("cNote").textContent="第 1 段：眼睛跟著橘點看螢幕。第 2 段：依語音提示看筆記本、前方、左右（聽聲音就好，不用看螢幕）。請開啟聲音。";
+  $("cNote").textContent="第 1 段：眼睛跟著橘點看螢幕，再讀一小段文字。第 2 段：依語音提示看筆記本、前方、左右（聽聲音就好，不用看螢幕）。請開啟聲音。";
 });
 $("cCancel").addEventListener("click",()=>{ $("calib").hidden=true; });
 $("cGo").addEventListener("click", async ()=>{
@@ -342,23 +364,29 @@ $("cGo").addEventListener("click", async ()=>{
   const screen=[];
   for(const [x,y] of tour){ pt.style.left=x*100+"%"; pt.style.top=y*100+"%"; await sleep(500); screen.push(...await collect(500)); }
   pt.hidden=true;
+  // --- phase 1b: real reading (what "looking at the screen" actually looks like in use)
+  $("cInstr").textContent="照平常速度讀下面這段"; $("cNote").textContent="";
+  $("cCount").innerHTML='<p style="font-size:17px;font-weight:400;line-height:1.8;text-align:left;color:var(--ink);max-width:36ch;margin:12px auto">細胞是生物體的基本單位。細胞膜包住細胞，控制物質進出；細胞核裡有遺傳物質，指揮細胞的活動；粒線體負責把養分轉成能量。植物細胞另外還有細胞壁和葉綠體，所以能維持形狀，並自己製造養分。</p>';
+  say("請照平常的速度，讀螢幕上的這段文字。"); await sleep(1500);
+  screen.push(...await collect(8000));
+  $("cCount").textContent="";
   // --- phase 2: away (voice-guided)
   $("cStep").textContent="第 2 段 / 2"; $("cInstr").textContent="依語音提示看別的地方"; $("cNote").textContent="聽到「嗶」聲就回來看螢幕";
-  const away=[];
-  const targets=[["低頭看桌上的筆記本",3000],["抬頭看正前方，像在看老師或白板",2500],["看左邊",1500],["看右邊",1500]];
-  for(const [txt,ms] of targets){
+  const away={};
+  const targets=[["note","低頭看桌上的筆記本",3000],["front","抬頭看正前方，像在看老師或白板",2500],["left","看左邊",1500],["right","看右邊",1500]];
+  for(const [key,txt,ms] of targets){
     $("cInstr").textContent=txt; say(txt); await sleep(1600);
-    away.push(...await collect(ms));
+    away[key]=(await collect(ms)).map(x=>x.f);
   }
   beep(); say("好，請看回螢幕。");
   $("cInstr").textContent="計算中…"; await sleep(600);
   calib.active=false; $("calib").hidden=true;
   if(screen.length<20){ statusEl.textContent=`看螢幕樣本太少（${screen.length}），請確認臉在鏡頭內再校準一次`; return; }
   const lidBase=screen.reduce((s,x)=>s+x.lid,0)/screen.length;
-  const acc=train(screen.map(x=>x.f), away.map(x=>x.f), lidBase);
-  $("thr").textContent=model.thr.toFixed(2);
-  statusEl.textContent=`校準完成：看螢幕 ${screen.length} 格、看別處 ${away.length} 格，區分準確度 ${(acc*100).toFixed(0)}%`;
-  $("stateSub").textContent= acc<0.8 ? "區分準確度偏低：試著把裝置擺穩、讓臉完整入鏡後重新校準" : "開始閱讀下方文字，狀態會即時更新";
+  const acc=train(screen.map(x=>x.f), away, lidBase);
+  $("thr").textContent=model.margin.toFixed(2);
+  statusEl.textContent=`校準完成：看螢幕 ${screen.length} 格、看別處 ${Object.values(away).flat().length} 格，區分準確度 ${(acc*100).toFixed(0)}%`;
+  $("stateSub").textContent= acc<0.8 ? "區分準確度偏低：試著把裝置擺穩、讓臉完整入鏡後重新校準" : "開始閱讀下方文字。使用中點擊或捲動螢幕，會自動修正判斷";
   resetStats(); $("btnReset").disabled=false;
 });
 
@@ -367,7 +395,7 @@ $("btnReset").addEventListener("click",resetStats);
 
 // ---------------- export ----------------
 $("btnCsv").addEventListener("click", async ()=>{
-  const cols=["t","state","raw","dist","pitch","yaw","lid"];
+  const cols=["t","state","raw","score","dS","near","touch","pitch","yaw","lid","f0","f1","f2","f3","f4","f5","f6","f7","f8","f9"];
   const csv=[cols.join(",")].concat(T.rows.map(r=>cols.map(c=>r[c]??"").join(","))).join("\n");
   const name="focus_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
   const file=new File([csv],name,{type:"text/csv"});
