@@ -153,6 +153,12 @@ button.rec{color:var(--bad)}
       </section>
     </div>
   </div>
+  <section class="card" id="csvBox" hidden style="margin-top:12px">
+    <h2>匯出資料</h2>
+    <p class="note mono" id="csvInfo"></p>
+    <textarea id="csvText" readonly style="width:100%;height:140px;font:12px/1.4 'IBM Plex Mono',monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px"></textarea>
+    <div class="btns" style="margin-top:8px"><button id="csvCopy">複製 CSV</button></div>
+  </section>
 </div>
 
 <div id="calib" hidden>
@@ -326,7 +332,7 @@ function process(res, now){
 
   row.onScreen = onScreen?1:0;
   if(S.model && S.smooth.x!=null){ row.screenX=Math.round(S.smooth.x); row.screenY=Math.round(S.smooth.y); }
-  if(S.recording){ S.rows.push(row); $("recN").textContent = S.rows.length; }
+  if(S.recording){ S.rows.push(row); $("recN").textContent = S.rows.length; if(S.rows.length===1) $("btnCsv").disabled=false; }
 
   // feed calibration sampler
   if(calib.active && calib.collecting && S.feat) calib.samples.push({f:S.feat.slice(), x:calib.cur.x, y:calib.cur.y});
@@ -414,16 +420,38 @@ $("calibGo").addEventListener("click", async ()=>{
 $("btnRec").addEventListener("click", ()=>{
   S.recording=!S.recording;
   const b=$("btnRec");
-  if(S.recording){ S.rows=[]; b.textContent="停止記錄"; b.classList.add("rec"); $("btnCsv").disabled=true; }
+  if(S.recording){ S.rows=[]; b.textContent="停止記錄"; b.classList.add("rec"); }
   else { b.textContent="開始記錄"; b.classList.remove("rec"); $("btnCsv").disabled=S.rows.length===0; }
 });
-$("btnCsv").addEventListener("click", ()=>{
+$("btnCsv").addEventListener("click", async ()=>{
+  if(S.recording) $("btnRec").click();
+  if(!S.rows.length){ statusEl.textContent="還沒有記錄到資料：先按「開始記錄」"; return; }
   const cols=["t","face","onScreen","yaw","pitch","roll","gazeH","gazeV","blinkL","blinkR","irisRx","irisRy","irisLx","irisLy","distCm","browDown","jawOpen","screenX","screenY"];
   const csv=[cols.join(",")].concat(S.rows.map(r=>cols.map(c=>r[c]??"").join(","))).join("\n");
+  const name="gaze_probe_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
+  // always show the data on the page so it can be copied even if saving fails
+  $("csvBox").hidden=false; $("csvText").value=csv;
+  $("csvInfo").textContent=`${S.rows.length} 筆資料 · ${name}`;
+  const file=new File([csv],name,{type:"text/csv"});
+  // 1) mobile: share sheet (LINE / Drive / 儲存到檔案)
+  try{
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:name});
+      statusEl.textContent="已開啟分享選單：選 LINE、Google Drive 或「儲存到檔案」";
+      return;
+    }
+  }catch(e){ if(e.name==="AbortError"){ statusEl.textContent="已取消分享，資料仍顯示在下方可複製"; return; } console.warn(e); }
+  // 2) fallback: download link
   const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download="gaze_probe_"+new Date().toISOString().replace(/[:.]/g,"-")+".csv";
-  a.click();
+  a.href=URL.createObjectURL(file); a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},4000);
+  statusEl.textContent="已嘗試下載；如果手機沒存到，請用下方「複製 CSV」";
+});
+$("csvCopy").addEventListener("click", async ()=>{
+  const t=$("csvText");
+  try{ await navigator.clipboard.writeText(t.value); $("csvCopy").textContent="已複製"; }
+  catch{ t.focus(); t.select(); $("csvCopy").textContent="已選取，請按複製"; }
+  setTimeout(()=>$("csvCopy").textContent="複製 CSV",2000);
 });
 </script>
 </body>
