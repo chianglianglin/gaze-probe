@@ -94,8 +94,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .plan h3{margin:0 0 4px;font-size:18px}
 .plan .phase{display:inline-block;font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--ink);color:var(--bg);margin-bottom:8px}
 .plan ul{margin:6px 0 0;padding-left:20px}
-.tbl{width:100%;border-collapse:collapse;font-size:13px}
-.tbl th,.tbl td{text-align:right;padding:5px 6px;border-bottom:1px solid var(--line)}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th,.tbl td{text-align:right;padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
 .tbl th:first-child,.tbl td:first-child{text-align:left}
 .wrapT{overflow-x:auto}
 </style>
@@ -109,7 +109,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     <p>接下來畫面會出現幾張主題卡片。不用急著選，自由地看、想點就點。系統會記錄你的視線停留在哪些卡片、點了哪些，最後整理出你可能有興趣的主題和建議的學習方式。影像只在這台裝置上處理。</p>
     <ol class="steps">
       <li><div><b>開啟鏡頭</b>：把裝置放在平常使用的位置，臉要完整入鏡</div></li>
-      <li><div><b>視線校準（約 20 秒）</b>：依序看亮起來的四個格子，再看一下別處</div></li>
+      <li><div><b>視線校準（約 30 秒）</b>：依序看亮起來的四個格子，再看一下別處</div></li>
       <li><div><b>自由瀏覽（2 輪，每輪 30 秒）</b>：看卡片，想知道更多就點開</div></li>
       <li><div><b>看結果</b>：興趣排行和建議的學習方式</div></li>
     </ol>
@@ -156,7 +156,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   <div class="res">
     <h1>你的興趣探索結果</h1>
     <div class="card"><h2>興趣排行</h2><div class="rank" id="rank"></div>
-      <p class="status">分數 = 視線停留 40% ＋ 回頭看次數 15% ＋ 點開 20% ＋ 閱讀時間 10% ＋ 按「想學更多」15%</p></div>
+      <p class="status">分數 = 行為 60%（點開、閱讀時間、想學更多）＋ 視線 40%（停留、回看）。卡片所在的格子如果校準準確度低於 70%，那張卡的視線不計分，只看行為。</p></div>
     <div class="card plan" id="plan"></div>
     <div class="card"><h2>原始數據</h2><div class="wrapT"><table class="tbl mono" id="tbl"></table></div>
       <p class="status" id="quality"></p></div>
@@ -229,34 +229,45 @@ function extract(res){
   return { f:[p.pitch/10,p.yaw/10,p.roll/10,gH*3,gV*3,down*3,lid*3,(r.y+l.y)/2*10,(r.x+l.x)/2*10,lm[1].y*5,lm[1].x*5], lid, pose:p };
 }
 
-// ---------------- classifier: nearest class, pooled Mahalanobis ----------------
+// ---------------- classifier: per-class Gaussian (covariance shrunk toward pooled) ----------------
 // classes: "0".."3" = the four card cells, "away" = not looking at the screen
 let model=null;
 function meanVec(X){ const m=Array(FEAT_N).fill(0); for(const x of X) for(let i=0;i<FEAT_N;i++) m[i]+=x[i]; return m.map(v=>v/X.length); }
-function invert(A){ const n=A.length, M=A.map((r,i)=>[...r,...Array.from({length:n},(_,j)=>i===j?1:0)]);
+function scatter(X,mu){ const C=Array.from({length:FEAT_N},()=>Array(FEAT_N).fill(0));
+  for(const x of X) for(let i=0;i<FEAT_N;i++) for(let j=0;j<FEAT_N;j++) C[i][j]+=(x[i]-mu[i])*(x[j]-mu[j]); return C; }
+function invertLD(A){ // returns {inv, logdet}
+  const n=A.length, M=A.map((r,i)=>[...r,...Array.from({length:n},(_,j)=>i===j?1:0)]); let ld=0;
   for(let c=0;c<n;c++){ let p=c; for(let r=c+1;r<n;r++) if(Math.abs(M[r][c])>Math.abs(M[p][c])) p=r;
-    [M[c],M[p]]=[M[p],M[c]]; const d=M[c][c]||1e-9; for(let k=0;k<2*n;k++) M[c][k]/=d;
+    [M[c],M[p]]=[M[p],M[c]]; const d=M[c][c]||1e-9; ld+=Math.log(Math.abs(d)); for(let k=0;k<2*n;k++) M[c][k]/=d;
     for(let r=0;r<n;r++){ if(r===c) continue; const f=M[r][c]; if(!f) continue; for(let k=0;k<2*n;k++) M[r][k]-=f*M[c][k]; } }
-  return M.map(r=>r.slice(n)); }
-function md(x,mu){ const d=x.map((v,i)=>v-mu[i]); let s=0;
-  for(let i=0;i<FEAT_N;i++){ let t=0; for(let j=0;j<FEAT_N;j++) t+=model.inv[i][j]*d[j]; s+=d[i]*t; } return Math.sqrt(Math.max(0,s)/FEAT_N); }
-function train(classes){ // {label:[f,...]}
-  model={mu:{}};
-  const C=Array.from({length:FEAT_N},()=>Array(FEAT_N).fill(0)); let n=0,g=0;
-  for(const k in classes){ const X=classes[k]; if(X.length<5) continue; g++; const mu=meanVec(X); model.mu[k]=mu;
-    for(const x of X){ n++; for(let i=0;i<FEAT_N;i++) for(let j=0;j<FEAT_N;j++) C[i][j]+=(x[i]-mu[i])*(x[j]-mu[j]); } }
-  for(let i=0;i<FEAT_N;i++){ for(let j=0;j<FEAT_N;j++) C[i][j]/=Math.max(1,n-g); C[i][i]+=0.05; }
-  model.inv=invert(C);
-  // leave-in accuracy as a quick quality signal
-  let ok=0,tot=0, conf={};
-  for(const k in classes) for(const x of classes[k]){ const p=classify(x).label; tot++; if(p===k) ok++; conf[k]=(conf[k]||0)+(p===k?1:0); }
-  model.acc=ok/Math.max(1,tot);
-  model.perClass=Object.fromEntries(Object.keys(classes).map(k=>[k,(conf[k]||0)/Math.max(1,classes[k].length)]));
-  return model.acc;
+  return {inv:M.map(r=>r.slice(n)), logdet:ld}; }
+const SHRINK=0.5, RIDGE=0.05;
+function fitModel(classes){ // {label:[f,...]}
+  const m={cls:{}}; const P=Array.from({length:FEAT_N},()=>Array(FEAT_N).fill(0)); let n=0,g=0; const tmp={};
+  for(const k in classes){ const X=classes[k]; if(X.length<8) continue; const mu=meanVec(X), S=scatter(X,mu); tmp[k]={mu,S,n:X.length}; g++; n+=X.length;
+    for(let i=0;i<FEAT_N;i++) for(let j=0;j<FEAT_N;j++) P[i][j]+=S[i][j]; }
+  for(let i=0;i<FEAT_N;i++) for(let j=0;j<FEAT_N;j++) P[i][j]/=Math.max(1,n-g);
+  for(const k in tmp){ const {mu,S,n:nk}=tmp[k];
+    const C=S.map((r,i)=>r.map((v,j)=>(1-SHRINK)*v/Math.max(1,nk-1)+SHRINK*P[i][j]+(i===j?RIDGE:0)));
+    m.cls[k]={mu,...invertLD(C)}; }
+  return m;
 }
-function classify(x){ let best="",bd=Infinity,second=Infinity;
-  for(const k in model.mu){ const d=md(x,model.mu[k]); if(d<bd){second=bd;bd=d;best=k;} else if(d<second) second=d; }
-  return {label:best, margin:second-bd}; }
+function classifyWith(m,x){ let best="",bs=Infinity,second=Infinity;
+  for(const k in m.cls){ const c=m.cls[k]; const d=x.map((v,i)=>v-c.mu[i]); let q=0;
+    for(let i=0;i<FEAT_N;i++){ let t=0; for(let j=0;j<FEAT_N;j++) t+=c.inv[i][j]*d[j]; q+=d[i]*t; }
+    const sc=q+c.logdet; if(sc<bs){second=bs;bs=sc;best=k;} else if(sc<second) second=sc; }
+  return {label:best, margin:second-bs}; }
+function classify(x){ return classifyWith(model,x); }
+// hold-out by pass: train on all passes but the last one of each class, test on the last pass (frames within a pass are correlated)
+function holdout(passes){ // {label:[[f..],[f..]]}
+  const tr={}, te={};
+  for(const k in passes){ const ps=passes[k].filter(p=>p.length); if(ps.length>=2){ tr[k]=ps.slice(0,-1).flat(); te[k]=ps[ps.length-1]; } else { tr[k]=ps.flat(); te[k]=[]; } }
+  const m=fitModel(tr); const per={}; let ok=0,tot=0;
+  for(const k in te){ if(!te[k].length||!m.cls[k]){ per[k]=null; continue; } let c=0; for(const x of te[k]) if(classifyWith(m,x).label===k) c++; per[k]=c/te[k].length; ok+=c; tot+=te[k].length; }
+  return {acc: tot?ok/tot:0, per};
+}
+let calibData=null;  // {label:[f,...]} — grows with tap corrections
+function retrain(){ model=fitModel(calibData); }
 
 // ---------------- camera ----------------
 async function loadModel(){
@@ -316,47 +327,52 @@ $("btnCalib").addEventListener("click", async ()=>{
   cells.forEach(c=>{ c.className="cell calibCell"; c.innerHTML=""; });
   const msg=$("calibMsg"); msg.hidden=false; msg.textContent="頭自然不動，只用眼睛看亮起來的格子中央的圓點";
   say("請看亮起來的格子中間的圓點，頭盡量不要動。"); await sleep(2600); msg.hidden=true;
-  const data={"0":[],"1":[],"2":[],"3":[],"away":[]};
-  const order=[0,1,3,2,3,0,2,1];   // two passes, different order
+  const passes={"0":[],"1":[],"2":[],"3":[],"away":[]};
+  const order=[0,1,3,2, 1,0,2,3, 0,1,2,3];   // three passes, each in a different order
   for(let i=0;i<order.length;i++){
     const q=order[i]; cells.forEach(c=>c.classList.remove("on")); cells[q].classList.add("on");
     cells[q].innerHTML='<div class="dot"></div>';
     $("bProg").style.width=((i+1)/(order.length+1)*100)+"%";
-    await sleep(700); data[q].push(...await collect(1300));
+    await sleep(700); passes[q].push(await collect(1300));
     cells[q].innerHTML="";
   }
   cells.forEach(c=>c.classList.remove("on"));
   msg.hidden=false; msg.textContent="現在把視線移開螢幕：看桌面、看前方、看旁邊，聽到嗶聲再回來";
   say("請把視線移開螢幕，看桌面、前方或旁邊。"); await sleep(1800);
-  data.away.push(...await collect(3500));
+  passes.away.push(await collect(1800)); passes.away.push(await collect(1700));
   try{ const a=new AudioContext(), o=a.createOscillator(); o.connect(a.destination); o.start(); o.stop(a.currentTime+.12);}catch{}
   $("bProg").style.width="100%"; msg.hidden=true;
+  const data=Object.fromEntries(Object.entries(passes).map(([k,v])=>[k,v.flat()]));
   const total=Object.values(data).reduce((s,x)=>s+x.length,0);
-  if(data[0].length+data[1].length+data[2].length+data[3].length<30){
+  if(data[0].length+data[1].length+data[2].length+data[3].length<40){
     show("sIntro"); $("status").textContent=`校準樣本太少（${total}），請確認臉完整入鏡後再試一次`; return; }
-  const acc=train(data);
-  calibInfo={acc, perClass:model.perClass, n:Object.fromEntries(Object.entries(data).map(([k,v])=>[k,v.length]))};
+  const ho=holdout(passes);
+  calibData=data; retrain();
+  calibInfo={acc:ho.acc, perClass:ho.per, n:Object.fromEntries(Object.entries(data).map(([k,v])=>[k,v.length])), tapFrames:0};
   startBrowse();
 });
 let calibInfo=null;
 
 // ---------------- browsing ----------------
-const browse={active:false, round:0, layout:[], t0:0, last:0, cur:null, votes:[], stats:{}, events:[], frames:0, faceFrames:0};
-function freshStats(){ const s={}; for(const t of TOPICS) s[t.id]={dwell:0,visits:0,opens:0,readMs:0,more:0,shown:0}; return s; }
+const browse={active:false, round:0, layout:[], layouts:[], t0:0, last:0, cur:null, votes:[], stats:{}, events:[], frames:0, faceFrames:0, recent:[]};
+const REL_MIN=0.7;   // a cell's gaze data counts only if its hold-out accuracy is at least this
+function freshStats(){ const s={}; for(const t of TOPICS) s[t.id]={dwell:0,visits:0,opens:0,readMs:0,more:0,shown:0,cell:null,round:null,gazeOk:false}; return s; }
 function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function startBrowse(){
-  Object.assign(browse,{round:0,stats:freshStats(),events:[],frames:0,faceFrames:0});
+  Object.assign(browse,{round:0,stats:freshStats(),events:[],frames:0,faceFrames:0,layouts:[],recent:[]});
   say("開始自由瀏覽，想知道更多就點開卡片。");
   startRound();
 }
 function startRound(){
   const ids=ROUNDS[browse.round].map(i=>TOPICS[i]);
   browse.layout=shuffle(ids);                       // randomise position to cancel layout bias
+  browse.layouts.push(browse.layout.map(t=>t.id));
   browse.layout.forEach((t,q)=>{
-    browse.stats[t.id].shown++;
+    const st=browse.stats[t.id]; st.shown++; st.cell=q; st.round=browse.round;
+    st.gazeOk=(calibInfo.perClass[String(q)]??0)>=REL_MIN;
     const c=cells[q]; c.className="cell"; c.style.background=`color-mix(in srgb,var(${t.c}) 10%,var(--panel))`;
     c.innerHTML=`<div class="art">${t.art(`var(${t.c})`)}</div><div class="txt"><h3>${t.name}</h3><p>${t.tease}</p></div><div class="gz"></div>`;
-    c.onclick=()=>openTopic(t);
+    c.onclick=()=>openTopic(t,q);
   });
   $("bTitle").textContent=`自由瀏覽 · 第 ${browse.round+1} / ${ROUNDS.length} 輪`;
   browse.active=true; browse.t0=performance.now(); browse.elapsed=0; browse.last=browse.t0; browse.cur=null; browse.votes=[];
@@ -368,6 +384,7 @@ function tick(now){
   const left=Math.max(0,ROUND_MS-browse.elapsed);
   $("bTimer").textContent=Math.ceil(left/1000)+" 秒"; $("bProg").style.width=(100*browse.elapsed/ROUND_MS)+"%";
   let lab="none";
+  if(latest && latest.lid<0.45){ browse.recent.push({t:now,f:latest.f}); while(browse.recent.length && now-browse.recent[0].t>1500) browse.recent.shift(); }
   if(latest){ browse.faceFrames++; lab = latest.lid>0.45 ? (browse.cur??"none") : classify(latest.f).label; }
   // majority vote over last 5 frames to suppress jitter
   browse.votes.push(lab); if(browse.votes.length>5) browse.votes.shift();
@@ -391,8 +408,12 @@ function endRound(){
 
 // ---------------- detail sheet ----------------
 let openT=null, openAt=0;
-function openTopic(t){
+function openTopic(t,q){
   openT=t; openAt=performance.now(); browse.stats[t.id].opens++;
+  // tap correction: just before tapping a card, the eyes were on that card
+  const fr=browse.recent.filter(r=>openAt-r.t<=1000 && openAt-r.t>=120).map(r=>r.f);
+  if(fr.length>=3 && calibData){ calibData[String(q)].push(...fr); calibInfo.tapFrames+=fr.length; retrain(); }
+  browse.recent=[];
   $("dArt").innerHTML=t.art(`var(${t.c})`); $("dArt").style.background=`color-mix(in srgb,var(${t.c}) 12%,var(--panel))`;
   $("dTitle").textContent=t.name; $("dBody").textContent=t.body; $("dQ").textContent="想一想："+t.q; $("dNote").textContent="";
   $("dMore").disabled=false; $("sSheet").hidden=false; window.scrollTo(0,0);
@@ -412,18 +433,23 @@ const PHASES={
 };
 function scores(){
   const S=browse.stats, ids=TOPICS.map(t=>t.id);
-  const mx=k=>Math.max(1e-9,...ids.map(i=>S[i][k]));
+  const okIds=ids.filter(i=>S[i].gazeOk);
+  const mxG=k=>Math.max(1e-9,...okIds.map(i=>S[i][k]),0), mx=k=>Math.max(1e-9,...ids.map(i=>S[i][k]));
+  const anyGaze=okIds.length>0;
   return TOPICS.map(t=>{ const s=S[t.id];
-    const score = .40*s.dwell/mx("dwell") + .15*s.visits/mx("visits") + .20*Math.min(1,s.opens) + .10*s.readMs/mx("readMs") + .15*Math.min(1,s.more);
+    const beh=(.45*Math.min(1,s.opens) + .20*s.readMs/mx("readMs") + .35*Math.min(1,s.more));       // 0..1
+    const gaze=s.gazeOk ? (.75*s.dwell/mxG("dwell") + .25*s.visits/mxG("visits")) : null;             // 0..1 or unknown
+    // reliable gaze: 40% gaze + 60% behaviour. Unreliable gaze: behaviour only (gaze treated as unknown, not as zero).
+    const score = gaze==null ? beh : .40*gaze + .60*beh;
     const phase = s.more>0 ? 3 : (s.opens>0 && s.readMs>8000) ? 2 : 1;
-    return {t, s, score, phase}; }).sort((a,b)=>b.score-a.score);
+    return {t, s, score, phase, gaze, beh}; }).sort((a,b)=>b.score-a.score);
 }
 function showResults(){
   try{ speechSynthesis.cancel(); }catch{}
   show("sRes"); window.scrollTo(0,0);
   const R=scores(), top=R[0].score||1;
   $("rank").innerHTML=R.map(r=>{
-    const chips=[`看 ${(r.s.dwell/1000).toFixed(1)} 秒`,`回看 ${r.s.visits} 次`]; if(r.s.opens) chips.push("點開"); if(r.s.readMs) chips.push(`讀 ${(r.s.readMs/1000).toFixed(0)} 秒`); if(r.s.more) chips.push("想學更多");
+    const chips=r.s.gazeOk ? [`看 ${(r.s.dwell/1000).toFixed(1)} 秒`,`回看 ${r.s.visits} 次`] : ["視線資料不計分"]; if(r.s.opens) chips.push("點開"); if(r.s.readMs) chips.push(`讀 ${(r.s.readMs/1000).toFixed(0)} 秒`); if(r.s.more) chips.push("想學更多");
     return `<div class="rk"><b>${r.t.name}</b><div class="track"><div class="fill" style="width:${(100*r.score/top).toFixed(0)}%;background:var(${r.t.c})"></div></div><span class="mono">${(r.score*100).toFixed(0)}</span>
       <div class="chips">${chips.map(c=>`<span class="chip">${c}</span>`).join("")}</div></div>`;
   }).join("");
@@ -432,14 +458,15 @@ function showResults(){
     <ul>${ph.list.map(x=>`<li>${x}</li>`).join("")}</ul>
     <p class="status" style="margin-top:8px">其他科目也可以用「${best.t.name}」當例子包裝，例如用${best.t.name}的情境出數學題。${R[1]?`第二名是「${R[1].t.name}」，可以當作備用主題。`:""}</p>`;
   const S=browse.stats;
-  $("tbl").innerHTML=`<tr><th>主題</th><th>視線(s)</th><th>回看</th><th>點開</th><th>閱讀(s)</th><th>想學更多</th></tr>`+
-    TOPICS.map(t=>{const s=S[t.id]; return `<tr><td>${t.name}</td><td>${(s.dwell/1000).toFixed(1)}</td><td>${s.visits}</td><td>${s.opens}</td><td>${(s.readMs/1000).toFixed(0)}</td><td>${s.more}</td></tr>`;}).join("");
+  $("tbl").innerHTML=`<tr><th>主題</th><th>位置</th><th>視線(s)</th><th>回看</th><th>點開</th><th>閱讀(s)</th><th>想學更多</th></tr>`+
+    TOPICS.map(t=>{const s=S[t.id]; return `<tr><td>${t.name}</td><td>${["左上","右上","左下","右下"][s.cell]??"-"}${s.gazeOk?"":" ✕"}</td><td>${(s.dwell/1000).toFixed(1)}</td><td>${s.visits}</td><td>${s.opens}</td><td>${(s.readMs/1000).toFixed(0)}</td><td>${s.more}</td></tr>`;}).join("");
   const facePct=browse.frames?Math.round(100*browse.faceFrames/browse.frames):0;
-  $("quality").textContent=`校準區分準確度 ${(calibInfo.acc*100).toFixed(0)}%（四格：${["0","1","2","3"].map(k=>Math.round(100*(calibInfo.perClass[k]||0))+"%").join(" / ")}，離開：${Math.round(100*(calibInfo.perClass.away||0))}%）· 有偵測到臉 ${facePct}% · ${delegate} ${fps} fps。卡片位置每輪隨機排列，以抵消「先看左上角」的習慣。`;
+  const pc=k=>calibInfo.perClass[k]==null?"—":Math.round(100*calibInfo.perClass[k])+"%";
+  $("quality").textContent=`校準準確度（用沒參與訓練的那一輪測）${(calibInfo.acc*100).toFixed(0)}%：左上 ${pc("0")} / 右上 ${pc("1")} / 左下 ${pc("2")} / 右下 ${pc("3")} / 離開 ${pc("away")}。位置欄的 ✕ 表示那一格視線不計分。點卡片時用來修正的影格：${calibInfo.tapFrames}。有偵測到臉 ${facePct}% · ${delegate} ${fps} fps。`;
 }
 $("btnAgain").addEventListener("click",()=>{ show("sIntro"); });
 $("btnExport").addEventListener("click", async ()=>{
-  const out={when:new Date().toISOString(), delegate, fps, calib:calibInfo, scores:scores().map(r=>({id:r.t.id,name:r.t.name,score:+r.score.toFixed(3),phase:r.phase,...r.s})), events:browse.events};
+  const out={when:new Date().toISOString(), delegate, fps, calib:calibInfo, layouts:browse.layouts, scores:scores().map(r=>({id:r.t.id,name:r.t.name,score:+r.score.toFixed(3),phase:r.phase,gaze:r.gaze==null?null:+r.gaze.toFixed(3),beh:+r.beh.toFixed(3),...r.s})), events:browse.events};
   const name="interest_"+out.when.replace(/[:.]/g,"-")+".json";
   const file=new File([JSON.stringify(out,null,1)],name,{type:"application/json"});
   try{ if(navigator.canShare?.({files:[file]})){ await navigator.share({files:[file],title:name}); return; } }catch(e){ if(e.name==="AbortError") return; }
@@ -449,9 +476,9 @@ $("btnExport").addEventListener("click", async ()=>{
 // debug: ?demo skips camera to preview the flow with random gaze
 if(location.hash==="#demo"){
   delegate="demo"; landmarker={detectForVideo:()=>({faceLandmarks:[]})};
-  model=null; calibInfo={acc:0,perClass:{},n:{}};
+  model=null; calibInfo={acc:0.8,perClass:{"0":.8,"1":.4,"2":.95,"3":.9,away:.9},n:{},tapFrames:0};
   window.__demo=()=>{ Object.assign(browse,{round:0,stats:freshStats(),events:[],frames:0,faceFrames:0}); show("sBoard"); startRound();
-    browse.active=false; const S=browse.stats; S.dino.dwell=9000;S.dino.visits=5;S.dino.opens=1;S.dino.readMs=14000;S.dino.more=1;
+    browse.active=false; const S=browse.stats; for(const k in S) S[k].gazeOk=!["space","ocean"].includes(k); S.dino.dwell=9000;S.dino.visits=5;S.dino.opens=1;S.dino.readMs=14000;S.dino.more=1;
     S.space.dwell=6000;S.space.visits=4;S.music.dwell=3000;S.code.dwell=7000;S.code.opens=1;S.code.readMs=9000;S.ocean.dwell=4000;S.history.dwell=2000; showResults(); };
 }
 </script>
