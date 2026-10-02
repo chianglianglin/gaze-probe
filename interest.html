@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Interest Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+TC:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F2F0EA; --panel:#FFFFFF; --ink:#1B1F24; --muted:#5E6670; --line:#DAD6CC;
+  --accent:#E0542F; --ok:#2F8F4E;
+  --c0:#3B6FB6; --c1:#7A4FB0; --c2:#D07A1F; --c3:#2E8C6E;
+  --c4:#B8445F; --c5:#4A7F2F; --c6:#2C8AA6; --c7:#9A6B2E;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#121417; --panel:#1B1F24; --ink:#ECEEF0; --muted:#9AA3AD; --line:#2C323A; --accent:#FF7A50; --ok:#5CC27E;
+    color-scheme:dark; }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font:15px/1.6 "Noto Sans TC",system-ui,-apple-system,sans-serif}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+button{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+  padding:10px 16px;border-radius:10px;cursor:pointer;min-height:44px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* screens */
+.screen{min-height:100%;padding-inline:16px;padding-block:calc(env(safe-area-inset-top,0px) + 16px) calc(env(safe-area-inset-bottom,0px) + 16px)}
+.intro{max-width:620px;margin:0 auto;display:grid;gap:14px}
+.intro h1{font-size:26px;margin:8px 0 0;font-weight:800;text-wrap:balance}
+.intro p{margin:0;color:var(--muted)}
+.steps{display:grid;gap:8px;margin:4px 0;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start}
+.steps li::before{content:counter(s);width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--bg);
+  display:grid;place-items:center;font-weight:700;font-size:13px}
+.cam{position:relative;width:160px;aspect-ratio:4/3;border-radius:10px;overflow:hidden;background:#0F1513}
+.cam video,.cam canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.status{font-size:12px;color:var(--muted);min-height:1.4em}
+
+/* 2x2 board: shared by calibration and browsing */
+.board{position:fixed;inset:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr 1fr;gap:10px;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 10px calc(env(safe-area-inset-bottom,0px) + 10px);background:var(--bg)}
+.bar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:36px}
+.bar .t{font-weight:700}
+.timer{font-size:13px;color:var(--muted)}
+.prog{height:4px;border-radius:2px;background:var(--line);overflow:hidden;flex:1;max-width:200px}
+.prog i{display:block;height:100%;width:0;background:var(--accent)}
+.cell{position:relative;border-radius:14px;overflow:hidden;background:var(--panel);border:1px solid var(--line);
+  display:flex;flex-direction:column;cursor:pointer;transition:transform .15s}
+.cell:active{transform:scale(.985)}
+.cell .art{flex:1;min-height:0;display:grid;place-items:center}
+.cell .art svg{width:70%;height:90%;max-height:220px}
+.cell .txt{padding:10px 12px 12px}
+.cell h3{margin:0;font-size:18px;font-weight:800}
+.cell p{margin:2px 0 0;font-size:13px;color:var(--muted);line-height:1.45}
+.cell .gz{position:absolute;inset:0;border-radius:14px;box-shadow:inset 0 0 0 0 var(--accent);transition:box-shadow .12s;pointer-events:none}
+.cell.gazed .gz{box-shadow:inset 0 0 0 4px var(--accent)}
+.calibCell{background:transparent;border:2px dashed var(--line)}
+.calibCell.on{background:color-mix(in srgb,var(--accent) 14%,var(--panel));border-color:var(--accent)}
+.dot{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 8px color-mix(in srgb,var(--accent) 22%,transparent)}
+.dot::after{content:"";position:absolute;inset:12px;border-radius:50%;background:#fff}
+.calibMsg{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;padding:14px 18px;text-align:center;max-width:80%;z-index:5}
+
+/* detail sheet */
+.sheet{position:fixed;inset:0;z-index:20;background:var(--bg);overflow:auto;
+  padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
+.sheet .in{max-width:620px;margin:0 auto;display:grid;gap:12px}
+.sheet .art{height:160px;border-radius:14px;display:grid;place-items:center}
+.sheet .art svg{height:85%}
+.sheet h2{margin:0;font-size:24px;font-weight:800}
+.sheet p{margin:0}
+.sheet .q{border-left:3px solid var(--accent);padding-left:10px;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+
+/* results */
+.res{max-width:720px;margin:0 auto;display:grid;gap:14px}
+.res h1{font-size:24px;margin:8px 0 0;font-weight:800}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card h2{margin:0 0 8px;font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.rank{display:grid;gap:8px}
+.rk{display:grid;grid-template-columns:6.5em 1fr 3em;gap:10px;align-items:center;font-size:14px}
+.rk .track{height:14px;background:color-mix(in srgb,var(--line) 70%,transparent);border-radius:7px;overflow:hidden}
+.rk .fill{height:100%;border-radius:7px}
+.rk .chips{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:6px;margin-top:-2px}
+.chip{font-size:11px;padding:1px 8px;border-radius:999px;background:color-mix(in srgb,var(--line) 70%,transparent);color:var(--muted)}
+.plan h3{margin:0 0 4px;font-size:18px}
+.plan .phase{display:inline-block;font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--ink);color:var(--bg);margin-bottom:8px}
+.plan ul{margin:6px 0 0;padding-left:20px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th,.tbl td{text-align:right;padding:5px 6px;border-bottom:1px solid var(--line)}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.wrapT{overflow-x:auto}
+</style>
+</head>
+<body>
+
+<!-- ============ INTRO ============ -->
+<section class="screen" id="sIntro">
+  <div class="intro">
+    <h1>興趣探索</h1>
+    <p>接下來畫面會出現幾張主題卡片。不用急著選，自由地看、想點就點。系統會記錄你的視線停留在哪些卡片、點了哪些，最後整理出你可能有興趣的主題和建議的學習方式。影像只在這台裝置上處理。</p>
+    <ol class="steps">
+      <li><div><b>開啟鏡頭</b>：把裝置放在平常使用的位置，臉要完整入鏡</div></li>
+      <li><div><b>視線校準（約 20 秒）</b>：依序看亮起來的四個格子，再看一下別處</div></li>
+      <li><div><b>自由瀏覽（2 輪，每輪 30 秒）</b>：看卡片，想知道更多就點開</div></li>
+      <li><div><b>看結果</b>：興趣排行和建議的學習方式</div></li>
+    </ol>
+    <div class="row" style="align-items:center">
+      <div class="cam"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
+      <div style="display:grid;gap:8px">
+        <button id="btnCam" class="primary">1. 開啟鏡頭</button>
+        <button id="btnCalib" disabled>2. 開始校準</button>
+      </div>
+    </div>
+    <p class="status mono" id="status">模型尚未載入</p>
+  </div>
+</section>
+
+<!-- ============ BOARD (calibration + browse) ============ -->
+<section class="board" id="sBoard" hidden>
+  <div class="bar">
+    <span class="t" id="bTitle">校準</span>
+    <span class="prog"><i id="bProg"></i></span>
+    <span class="timer mono" id="bTimer"></span>
+  </div>
+  <div class="cell" data-q="0"></div><div class="cell" data-q="1"></div>
+  <div class="cell" data-q="2"></div><div class="cell" data-q="3"></div>
+  <div class="calibMsg" id="calibMsg" hidden></div>
+</section>
+
+<!-- ============ DETAIL SHEET ============ -->
+<section class="sheet" id="sSheet" hidden>
+  <div class="in">
+    <div class="art" id="dArt"></div>
+    <h2 id="dTitle"></h2>
+    <p id="dBody"></p>
+    <p class="q" id="dQ"></p>
+    <div class="row">
+      <button class="primary" id="dMore">想學更多</button>
+      <button id="dBack">回到卡片</button>
+    </div>
+    <p class="status" id="dNote"></p>
+  </div>
+</section>
+
+<!-- ============ RESULTS ============ -->
+<section class="screen" id="sRes" hidden>
+  <div class="res">
+    <h1>你的興趣探索結果</h1>
+    <div class="card"><h2>興趣排行</h2><div class="rank" id="rank"></div>
+      <p class="status">分數 = 視線停留 40% ＋ 回頭看次數 15% ＋ 點開 20% ＋ 閱讀時間 10% ＋ 按「想學更多」15%</p></div>
+    <div class="card plan" id="plan"></div>
+    <div class="card"><h2>原始數據</h2><div class="wrapT"><table class="tbl mono" id="tbl"></table></div>
+      <p class="status" id="quality"></p></div>
+    <div class="row"><button class="primary" id="btnExport">匯出 JSON</button><button id="btnAgain">重新探索</button></div>
+  </div>
+</section>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
+const $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const video=$("video"), canvas=$("overlay"), ctx=canvas.getContext("2d");
+let landmarker=null, running=false, lastVT=-1;
+
+// ---------------- topics ----------------
+const svg=(c,body)=>`<svg viewBox="0 0 120 90" fill="none" stroke="${c}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+const TOPICS=[
+ {id:"dino",name:"恐龍化石",c:"--c0",tease:"一根骨頭怎麼拼回一隻恐龍？",
+  art:c=>svg(c,`<path d="M15 70 q10-30 35-30 h20 q15 0 22-14 q4-8 12-6 q6 2 2 10 l-8 6 q-6 18-26 22 l4 12 M48 66 l-2 12 M40 40 q-12-14-4-24"/><circle cx="100" cy="22" r="2" fill="${c}"/>`),
+  body:"化石是生物遺骸被礦物慢慢取代形成的。古生物學家會比對骨頭形狀、牙齒磨損和埋藏的地層，推算恐龍的體型、吃什麼、甚至走路速度。",
+  q:"如果只找到一顆牙齒，你能推理出什麼？"},
+ {id:"space",name:"太空探索",c:"--c1",tease:"火箭為什麼要分好幾節？",
+  art:c=>svg(c,`<path d="M60 12 q14 14 14 40 v14 h-28 v-14 q0-26 14-40z M46 52 l-12 14 h12 M74 52 l12 14 h-12 M54 66 l-4 12 M66 66 l4 12"/><circle cx="60" cy="38" r="6"/>`),
+  body:"火箭燃料用完的部分會變成負擔。分節設計讓火箭邊飛邊丟掉空的燃料桶，剩下的部分更輕，才能用有限的燃料加速到繞地球的速度。",
+  q:"如果要去火星，你覺得最大的難題是什麼？"},
+ {id:"music",name:"音樂創作",c:"--c2",tease:"為什麼有些和弦聽起來很悲傷？",
+  art:c=>svg(c,`<path d="M40 70 v-50 l50-10 v50"/><ellipse cx="32" cy="70" rx="10" ry="7"/><ellipse cx="82" cy="60" rx="10" ry="7"/><path d="M40 32 l50-10"/>`),
+  body:"大三和弦和小三和弦只差中間一個音的半音。這一點點頻率比例的差別，讓大腦聽起來分別像「明亮」和「憂傷」，作曲家就用它來安排情緒。",
+  q:"你最近聽到哪首歌讓你心情改變？"},
+ {id:"sport",name:"運動科學",c:"--c3",tease:"短跑選手的起跑為什麼要蹲著？",
+  art:c=>svg(c,`<circle cx="70" cy="18" r="8"/><path d="M66 28 l-14 22 l18 8 l-6 22 M52 50 l-20 6 M62 34 l20 10 l10-6"/><path d="M14 82 h92"/>`),
+  body:"蹲踞式起跑讓身體重心往前傾，雙腿可以用更大的角度推地。牛頓第三定律告訴我們：推地越用力、方向越往後，身體就加速得越快。",
+  q:"你覺得什麼運動最需要用到物理？"},
+ {id:"code",name:"程式設計",c:"--c4",tease:"遊戲角色怎麼知道要往哪走？",
+  art:c=>svg(c,`<rect x="14" y="16" width="92" height="58" rx="8"/><path d="M38 38 l-10 8 l10 8 M82 38 l10 8 l-10 8 M66 32 l-12 28"/>`),
+  body:"遊戲裡的角色常用「尋路演算法」：把地圖切成格子，從起點一步步擴散，記錄每一格離終點多遠，最後沿著最短的路線走。",
+  q:"如果要你設計一個遊戲角色，你想讓它會做什麼？"},
+ {id:"plant",name:"植物生態",c:"--c5",tease:"植物沒有眼睛，怎麼知道光在哪？",
+  art:c=>svg(c,`<path d="M60 82 v-40 M60 52 q-24-4-28-26 q22 0 28 22 M60 42 q22-6 28-28 q-24 2-28 24"/><path d="M36 82 h48"/>`),
+  body:"植物體內有感光的蛋白質。被光照到的那一側生長激素會移到背光面，讓背光面長得比較快，莖就自然彎向光源。",
+  q:"如果把植物放進旋轉的盒子裡，它會怎麼長？"},
+ {id:"ocean",name:"海洋生物",c:"--c6",tease:"深海的魚為什麼會發光？",
+  art:c=>svg(c,`<path d="M20 46 q30-26 60 0 q-30 26-60 0z M80 46 l16-12 v24z"/><circle cx="34" cy="42" r="3" fill="${c}"/><path d="M40 14 q6-8 0-12 M60 20 q6-8 0-12"/>`),
+  body:"深海幾乎沒有陽光，很多生物靠體內的化學反應發光，用來吸引獵物、找伴侶，或是讓肚子的光跟上方微弱的光一樣亮，從下面看就隱形了。",
+  q:"如果你可以發光，你會拿來做什麼？"},
+ {id:"history",name:"古代文明",c:"--c7",tease:"金字塔的石頭是怎麼搬上去的？",
+  art:c=>svg(c,`<path d="M14 80 l46-64 l46 64z M37 48 h46 M26 64 h68"/>`),
+  body:"考古學家在採石場附近發現斜坡遺跡，以及工人營地的紀錄。目前主流的看法是用木橇在潑水的沙地上拖運，再沿著斜坡一層層往上拉。",
+  q:"你覺得還有什麼方法可能搬得動幾噸重的石頭？"},
+];
+const ROUNDS=[[0,1,2,3],[4,5,6,7]];
+const ROUND_MS=30000;
+
+// ---------------- features ----------------
+function poseFromMatrix(m){ const d=180/Math.PI;
+  return { yaw:Math.asin(Math.max(-1,Math.min(1,-m[2])))*d, pitch:Math.atan2(m[6],m[10])*d, roll:Math.atan2(m[1],m[0])*d }; }
+function bsMap(c){ const m={}; for(const x of c) m[x.categoryName]=x.score; return m; }
+const FEAT_N=11;
+function extract(res){
+  const lm=res.faceLandmarks[0], bs=bsMap(res.faceBlendshapes[0].categories);
+  const p=res.facialTransformationMatrixes?.[0]?poseFromMatrix(res.facialTransformationMatrixes[0].data):{yaw:0,pitch:0,roll:0};
+  const gH=((bs.eyeLookInLeft||0)+(bs.eyeLookOutRight||0))/2-((bs.eyeLookOutLeft||0)+(bs.eyeLookInRight||0))/2;
+  const gV=((bs.eyeLookUpLeft||0)+(bs.eyeLookUpRight||0))/2-((bs.eyeLookDownLeft||0)+(bs.eyeLookDownRight||0))/2;
+  const down=((bs.eyeLookDownLeft||0)+(bs.eyeLookDownRight||0))/2;
+  const lid=((bs.eyeBlinkLeft||0)+(bs.eyeBlinkRight||0))/2;
+  // iris position relative to eye-corner midpoint, normalised by eye width; x measured in image space (same direction for both eyes)
+  const ir=(c1,c2,i)=>{ const a=lm[c1],b=lm[c2],q=lm[i]; const w=Math.hypot(b.x-a.x,b.y-a.y)||1e-6;
+    return {x:(q.x-(a.x+b.x)/2)/w, y:(q.y-(a.y+b.y)/2)/w}; };
+  const r=ir(33,133,468), l=ir(362,263,473);
+  return { f:[p.pitch/10,p.yaw/10,p.roll/10,gH*3,gV*3,down*3,lid*3,(r.y+l.y)/2*10,(r.x+l.x)/2*10,lm[1].y*5,lm[1].x*5], lid, pose:p };
+}
+
+// ---------------- classifier: nearest class, pooled Mahalanobis ----------------
+// classes: "0".."3" = the four card cells, "away" = not looking at the screen
+let model=null;
+function meanVec(X){ const m=Array(FEAT_N).fill(0); for(const x of X) for(let i=0;i<FEAT_N;i++) m[i]+=x[i]; return m.map(v=>v/X.length); }
+function invert(A){ const n=A.length, M=A.map((r,i)=>[...r,...Array.from({length:n},(_,j)=>i===j?1:0)]);
+  for(let c=0;c<n;c++){ let p=c; for(let r=c+1;r<n;r++) if(Math.abs(M[r][c])>Math.abs(M[p][c])) p=r;
+    [M[c],M[p]]=[M[p],M[c]]; const d=M[c][c]||1e-9; for(let k=0;k<2*n;k++) M[c][k]/=d;
+    for(let r=0;r<n;r++){ if(r===c) continue; const f=M[r][c]; if(!f) continue; for(let k=0;k<2*n;k++) M[r][k]-=f*M[c][k]; } }
+  return M.map(r=>r.slice(n)); }
+function md(x,mu){ const d=x.map((v,i)=>v-mu[i]); let s=0;
+  for(let i=0;i<FEAT_N;i++){ let t=0; for(let j=0;j<FEAT_N;j++) t+=model.inv[i][j]*d[j]; s+=d[i]*t; } return Math.sqrt(Math.max(0,s)/FEAT_N); }
+function train(classes){ // {label:[f,...]}
+  model={mu:{}};
+  const C=Array.from({length:FEAT_N},()=>Array(FEAT_N).fill(0)); let n=0,g=0;
+  for(const k in classes){ const X=classes[k]; if(X.length<5) continue; g++; const mu=meanVec(X); model.mu[k]=mu;
+    for(const x of X){ n++; for(let i=0;i<FEAT_N;i++) for(let j=0;j<FEAT_N;j++) C[i][j]+=(x[i]-mu[i])*(x[j]-mu[j]); } }
+  for(let i=0;i<FEAT_N;i++){ for(let j=0;j<FEAT_N;j++) C[i][j]/=Math.max(1,n-g); C[i][i]+=0.05; }
+  model.inv=invert(C);
+  // leave-in accuracy as a quick quality signal
+  let ok=0,tot=0, conf={};
+  for(const k in classes) for(const x of classes[k]){ const p=classify(x).label; tot++; if(p===k) ok++; conf[k]=(conf[k]||0)+(p===k?1:0); }
+  model.acc=ok/Math.max(1,tot);
+  model.perClass=Object.fromEntries(Object.keys(classes).map(k=>[k,(conf[k]||0)/Math.max(1,classes[k].length)]));
+  return model.acc;
+}
+function classify(x){ let best="",bd=Infinity,second=Infinity;
+  for(const k in model.mu){ const d=md(x,model.mu[k]); if(d<bd){second=bd;bd=d;best=k;} else if(d<second) second=d; }
+  return {label:best, margin:second-bd}; }
+
+// ---------------- camera ----------------
+async function loadModel(){
+  $("status").textContent="載入模型中…";
+  const fs=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm");
+  const o=d=>({baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",delegate:d},
+    runningMode:"VIDEO",numFaces:1,outputFaceBlendshapes:true,outputFacialTransformationMatrixes:true});
+  try{ landmarker=await FaceLandmarker.createFromOptions(fs,o("GPU")); return "GPU"; }
+  catch(e){ console.warn(e); landmarker=await FaceLandmarker.createFromOptions(fs,o("CPU")); return "CPU"; }
+}
+let fps=0, fpsN=0, fpsT=0, delegate="";
+$("btnCam").addEventListener("click", async ()=>{
+  const b=$("btnCam"); b.disabled=true;
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false});
+    video.srcObject=s; await video.play();
+    if(!landmarker) delegate=await loadModel();
+    try{ await navigator.wakeLock?.request("screen"); }catch{}
+    running=true; requestAnimationFrame(loop);
+    b.textContent="鏡頭已開啟"; $("btnCalib").disabled=false;
+    setTimeout(()=>$("status").textContent=`模型已載入（${delegate}）· ${fps} fps`,1500);
+  }catch(e){ b.disabled=false; $("status").textContent="無法啟動："+(e.message||e); }
+});
+
+let latest=null;
+function loop(){
+  if(!running) return;
+  if(video.readyState>=2 && video.currentTime!==lastVT){
+    lastVT=video.currentTime; const now=performance.now();
+    const res=landmarker.detectForVideo(video,now);
+    fpsN++; if(now-fpsT>1000){ fps=fpsN; fpsN=0; fpsT=now; }
+    latest = res.faceLandmarks?.length ? extract(res) : null;
+    if(!$("sIntro").hidden) drawPreview(res);
+    if(collector) collector(latest, now);
+    if(browse.active) tick(now);
+  }
+  requestAnimationFrame(loop);
+}
+function drawPreview(res){
+  const w=video.videoWidth,h=video.videoHeight; if(canvas.width!==w){canvas.width=w;canvas.height=h;}
+  ctx.clearRect(0,0,w,h); if(!res.faceLandmarks?.length) return;
+  const lm=res.faceLandmarks[0]; ctx.strokeStyle="#FF7A50"; ctx.lineWidth=Math.max(2,w/200);
+  for(const conn of [FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS,FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS,FaceLandmarker.FACE_LANDMARKS_FACE_OVAL]){
+    ctx.beginPath(); for(const {start,end} of conn){ ctx.moveTo(lm[start].x*w,lm[start].y*h); ctx.lineTo(lm[end].x*w,lm[end].y*h);} ctx.stroke(); }
+}
+let collector=null;
+async function collect(ms){ const buf=[]; collector=x=>{ if(x && x.lid<0.45) buf.push(x.f); }; await sleep(ms); collector=null; return buf; }
+
+// ---------------- voice ----------------
+function say(t){ try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang="zh-TW"; u.rate=1.05; speechSynthesis.speak(u);}catch{} }
+
+// ---------------- calibration ----------------
+const cells=[...document.querySelectorAll("#sBoard .cell")];
+function show(id){ for(const s of ["sIntro","sBoard","sSheet","sRes"]) $(s).hidden = s!==id; }
+$("btnCalib").addEventListener("click", async ()=>{
+  show("sBoard"); $("bTitle").textContent="視線校準"; $("bTimer").textContent="";
+  cells.forEach(c=>{ c.className="cell calibCell"; c.innerHTML=""; });
+  const msg=$("calibMsg"); msg.hidden=false; msg.textContent="頭自然不動，只用眼睛看亮起來的格子中央的圓點";
+  say("請看亮起來的格子中間的圓點，頭盡量不要動。"); await sleep(2600); msg.hidden=true;
+  const data={"0":[],"1":[],"2":[],"3":[],"away":[]};
+  const order=[0,1,3,2,3,0,2,1];   // two passes, different order
+  for(let i=0;i<order.length;i++){
+    const q=order[i]; cells.forEach(c=>c.classList.remove("on")); cells[q].classList.add("on");
+    cells[q].innerHTML='<div class="dot"></div>';
+    $("bProg").style.width=((i+1)/(order.length+1)*100)+"%";
+    await sleep(700); data[q].push(...await collect(1300));
+    cells[q].innerHTML="";
+  }
+  cells.forEach(c=>c.classList.remove("on"));
+  msg.hidden=false; msg.textContent="現在把視線移開螢幕：看桌面、看前方、看旁邊，聽到嗶聲再回來";
+  say("請把視線移開螢幕，看桌面、前方或旁邊。"); await sleep(1800);
+  data.away.push(...await collect(3500));
+  try{ const a=new AudioContext(), o=a.createOscillator(); o.connect(a.destination); o.start(); o.stop(a.currentTime+.12);}catch{}
+  $("bProg").style.width="100%"; msg.hidden=true;
+  const total=Object.values(data).reduce((s,x)=>s+x.length,0);
+  if(data[0].length+data[1].length+data[2].length+data[3].length<30){
+    show("sIntro"); $("status").textContent=`校準樣本太少（${total}），請確認臉完整入鏡後再試一次`; return; }
+  const acc=train(data);
+  calibInfo={acc, perClass:model.perClass, n:Object.fromEntries(Object.entries(data).map(([k,v])=>[k,v.length]))};
+  startBrowse();
+});
+let calibInfo=null;
+
+// ---------------- browsing ----------------
+const browse={active:false, round:0, layout:[], t0:0, last:0, cur:null, votes:[], stats:{}, events:[], frames:0, faceFrames:0};
+function freshStats(){ const s={}; for(const t of TOPICS) s[t.id]={dwell:0,visits:0,opens:0,readMs:0,more:0,shown:0}; return s; }
+function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function startBrowse(){
+  Object.assign(browse,{round:0,stats:freshStats(),events:[],frames:0,faceFrames:0});
+  say("開始自由瀏覽，想知道更多就點開卡片。");
+  startRound();
+}
+function startRound(){
+  const ids=ROUNDS[browse.round].map(i=>TOPICS[i]);
+  browse.layout=shuffle(ids);                       // randomise position to cancel layout bias
+  browse.layout.forEach((t,q)=>{
+    browse.stats[t.id].shown++;
+    const c=cells[q]; c.className="cell"; c.style.background=`color-mix(in srgb,var(${t.c}) 10%,var(--panel))`;
+    c.innerHTML=`<div class="art">${t.art(`var(${t.c})`)}</div><div class="txt"><h3>${t.name}</h3><p>${t.tease}</p></div><div class="gz"></div>`;
+    c.onclick=()=>openTopic(t);
+  });
+  $("bTitle").textContent=`自由瀏覽 · 第 ${browse.round+1} / ${ROUNDS.length} 輪`;
+  browse.active=true; browse.t0=performance.now(); browse.elapsed=0; browse.last=browse.t0; browse.cur=null; browse.votes=[];
+}
+function tick(now){
+  const dt=now-browse.last; browse.last=now;
+  if(!$("sSheet").hidden){ return; }                // reading time is counted separately
+  browse.elapsed+=dt; browse.frames++;
+  const left=Math.max(0,ROUND_MS-browse.elapsed);
+  $("bTimer").textContent=Math.ceil(left/1000)+" 秒"; $("bProg").style.width=(100*browse.elapsed/ROUND_MS)+"%";
+  let lab="none";
+  if(latest){ browse.faceFrames++; lab = latest.lid>0.45 ? (browse.cur??"none") : classify(latest.f).label; }
+  // majority vote over last 5 frames to suppress jitter
+  browse.votes.push(lab); if(browse.votes.length>5) browse.votes.shift();
+  const cnt={}; for(const v of browse.votes) cnt[v]=(cnt[v]||0)+1;
+  const smooth=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0][0];
+  cells.forEach((c,q)=>c.classList.toggle("gazed", String(q)===smooth));
+  if(smooth!==browse.cur){
+    if(/^[0-3]$/.test(smooth)){ const t=browse.layout[+smooth]; browse.stats[t.id].visits++; }
+    browse.cur=smooth;
+  }
+  if(/^[0-3]$/.test(smooth)) browse.stats[browse.layout[+smooth].id].dwell+=dt;
+  browse.events.push({t:Math.round(now-browse.t0), r:browse.round, g:smooth});
+  if(left<=0) endRound();
+}
+function endRound(){
+  browse.active=false; cells.forEach(c=>c.classList.remove("gazed"));
+  browse.round++;
+  if(browse.round<ROUNDS.length){ say("換下一組卡片。"); setTimeout(startRound,600); }
+  else showResults();
+}
+
+// ---------------- detail sheet ----------------
+let openT=null, openAt=0;
+function openTopic(t){
+  openT=t; openAt=performance.now(); browse.stats[t.id].opens++;
+  $("dArt").innerHTML=t.art(`var(${t.c})`); $("dArt").style.background=`color-mix(in srgb,var(${t.c}) 12%,var(--panel))`;
+  $("dTitle").textContent=t.name; $("dBody").textContent=t.body; $("dQ").textContent="想一想："+t.q; $("dNote").textContent="";
+  $("dMore").disabled=false; $("sSheet").hidden=false; window.scrollTo(0,0);
+}
+function closeTopic(){ if(!openT) return; browse.stats[openT.id].readMs+=performance.now()-openAt; openT=null; $("sSheet").hidden=true; browse.last=performance.now(); }
+$("dBack").addEventListener("click",closeTopic);
+$("dMore").addEventListener("click",()=>{ browse.stats[openT.id].more++; $("dMore").disabled=true; $("dNote").textContent="已記錄：你想多學這個主題"; });
+
+// ---------------- scoring + recommendations ----------------
+const PHASES={
+  1:{name:"第 1 階段：興趣被引起",how:"目前只是被吸引，還不穩定。用新奇、有畫面的方式維持好奇。",
+     list:["短影片、圖片、動手小實驗開場","用謎題或「你猜猜看」引起好奇","每次內容短、成功感高"]},
+  2:{name:"第 2 階段：興趣持續中",how:"願意花時間看內容，需要讓它變得有意義、跟自己有關。",
+     list:["連結生活經驗的例子","小專題或和同伴一起做","老師或 AI 一對一引導、即時回饋"]},
+  3:{name:"第 3 階段：開始變成個人興趣",how:"會主動想知道更多。給挑戰、讓他自己發問，必要時再支援。",
+     list:["讓他自己提出問題再去找答案","難度略高的任務，搭配提示","介紹這個領域的人物與真實工作"]},
+};
+function scores(){
+  const S=browse.stats, ids=TOPICS.map(t=>t.id);
+  const mx=k=>Math.max(1e-9,...ids.map(i=>S[i][k]));
+  return TOPICS.map(t=>{ const s=S[t.id];
+    const score = .40*s.dwell/mx("dwell") + .15*s.visits/mx("visits") + .20*Math.min(1,s.opens) + .10*s.readMs/mx("readMs") + .15*Math.min(1,s.more);
+    const phase = s.more>0 ? 3 : (s.opens>0 && s.readMs>8000) ? 2 : 1;
+    return {t, s, score, phase}; }).sort((a,b)=>b.score-a.score);
+}
+function showResults(){
+  try{ speechSynthesis.cancel(); }catch{}
+  show("sRes"); window.scrollTo(0,0);
+  const R=scores(), top=R[0].score||1;
+  $("rank").innerHTML=R.map(r=>{
+    const chips=[`看 ${(r.s.dwell/1000).toFixed(1)} 秒`,`回看 ${r.s.visits} 次`]; if(r.s.opens) chips.push("點開"); if(r.s.readMs) chips.push(`讀 ${(r.s.readMs/1000).toFixed(0)} 秒`); if(r.s.more) chips.push("想學更多");
+    return `<div class="rk"><b>${r.t.name}</b><div class="track"><div class="fill" style="width:${(100*r.score/top).toFixed(0)}%;background:var(${r.t.c})"></div></div><span class="mono">${(r.score*100).toFixed(0)}</span>
+      <div class="chips">${chips.map(c=>`<span class="chip">${c}</span>`).join("")}</div></div>`;
+  }).join("");
+  const best=R[0], ph=PHASES[best.phase];
+  $("plan").innerHTML=`<h2>建議的學習方式</h2><span class="phase">${ph.name}</span><h3>從「${best.t.name}」開始</h3><p>${ph.how}</p>
+    <ul>${ph.list.map(x=>`<li>${x}</li>`).join("")}</ul>
+    <p class="status" style="margin-top:8px">其他科目也可以用「${best.t.name}」當例子包裝，例如用${best.t.name}的情境出數學題。${R[1]?`第二名是「${R[1].t.name}」，可以當作備用主題。`:""}</p>`;
+  const S=browse.stats;
+  $("tbl").innerHTML=`<tr><th>主題</th><th>視線(s)</th><th>回看</th><th>點開</th><th>閱讀(s)</th><th>想學更多</th></tr>`+
+    TOPICS.map(t=>{const s=S[t.id]; return `<tr><td>${t.name}</td><td>${(s.dwell/1000).toFixed(1)}</td><td>${s.visits}</td><td>${s.opens}</td><td>${(s.readMs/1000).toFixed(0)}</td><td>${s.more}</td></tr>`;}).join("");
+  const facePct=browse.frames?Math.round(100*browse.faceFrames/browse.frames):0;
+  $("quality").textContent=`校準區分準確度 ${(calibInfo.acc*100).toFixed(0)}%（四格：${["0","1","2","3"].map(k=>Math.round(100*(calibInfo.perClass[k]||0))+"%").join(" / ")}，離開：${Math.round(100*(calibInfo.perClass.away||0))}%）· 有偵測到臉 ${facePct}% · ${delegate} ${fps} fps。卡片位置每輪隨機排列，以抵消「先看左上角」的習慣。`;
+}
+$("btnAgain").addEventListener("click",()=>{ show("sIntro"); });
+$("btnExport").addEventListener("click", async ()=>{
+  const out={when:new Date().toISOString(), delegate, fps, calib:calibInfo, scores:scores().map(r=>({id:r.t.id,name:r.t.name,score:+r.score.toFixed(3),phase:r.phase,...r.s})), events:browse.events};
+  const name="interest_"+out.when.replace(/[:.]/g,"-")+".json";
+  const file=new File([JSON.stringify(out,null,1)],name,{type:"application/json"});
+  try{ if(navigator.canShare?.({files:[file]})){ await navigator.share({files:[file],title:name}); return; } }catch(e){ if(e.name==="AbortError") return; }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(file); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),3000);
+});
+
+// debug: ?demo skips camera to preview the flow with random gaze
+if(location.hash==="#demo"){
+  delegate="demo"; landmarker={detectForVideo:()=>({faceLandmarks:[]})};
+  model=null; calibInfo={acc:0,perClass:{},n:{}};
+  window.__demo=()=>{ Object.assign(browse,{round:0,stats:freshStats(),events:[],frames:0,faceFrames:0}); show("sBoard"); startRound();
+    browse.active=false; const S=browse.stats; S.dino.dwell=9000;S.dino.visits=5;S.dino.opens=1;S.dino.readMs=14000;S.dino.more=1;
+    S.space.dwell=6000;S.space.visits=4;S.music.dwell=3000;S.code.dwell=7000;S.code.opens=1;S.code.readMs=9000;S.ocean.dwell=4000;S.history.dwell=2000; showResults(); };
+}
+</script>
+</body>
+</html>
