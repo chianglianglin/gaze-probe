@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Speech Probe · 發音模型測試</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1d1d1f;--mut:#6b6b70;--line:#e2e0d8;--acc:#2f6fed;--ok:#1a8f4c;--bad:#c8402f;--warn:#b7791f;--chip:#eef2fb}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1f1f23;--ink:#eeeef0;--mut:#9a9aa2;--line:#33333a;--acc:#6f9dff;--ok:#4cc47f;--bad:#f07a68;--warn:#e0a94a;--chip:#262b3a}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei","Hiragino Sans","Yu Gothic",sans-serif}
+main{max-width:860px;margin:0 auto;padding:16px 16px 64px}
+h1{font-size:24px;margin:20px 0 4px}
+h2{font-size:17px;margin:0 0 8px}
+.sub,.note{color:var(--mut);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:12px 0}
+button,select,input{font:inherit;color:inherit;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:9px 14px}
+button{cursor:pointer}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.mono{font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;font-size:13px;width:100%}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top;white-space:nowrap}
+th{color:var(--mut);font-size:12px}
+td.w{white-space:normal;min-width:180px}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+textarea{width:100%;height:160px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px}
+.big{font-size:20px;font-weight:600}
+</style>
+</head>
+<body>
+<main>
+<h1>發音模型測試</h1>
+<p class="sub">在瀏覽器裡跑音素辨識模型（wav2vec2 XLSR-53，輸出國際音標），看它分不分得出長音、促音、清濁音。聲音不會上傳，模型下載後在這台電腦上運算。</p>
+
+<div class="card">
+  <h2>1. 載入模型</h2>
+  <div class="row">
+    <select id="backend">
+      <option value="wasm">WASM（q4，約 230 MB，最穩）</option>
+      <option value="webgpu">WebGPU（q4f16，約 188 MB，較快，需要顯示卡支援）</option>
+    </select>
+    <button class="primary" id="btnLoad">載入模型</button>
+  </div>
+  <div id="loadMsg" class="note">還沒載入。第一次要下載模型，需要一點時間。</div>
+</div>
+
+<div class="card">
+  <h2>2. 自我測試（用合成語音，不用麥克風）</h2>
+  <div class="note">44 段合成語音：16 組只差一個音的單字，加上 6 句旅遊句子的「正確版／故意唸錯版」。看模型能不能分出每一組。</div>
+  <div class="row"><button id="btnTest" disabled>開始自我測試</button><span id="testMsg" class="note"></span></div>
+  <div id="summary"></div>
+  <div class="scroll"><table id="tbl" hidden></table></div>
+</div>
+
+<div class="card">
+  <h2>3. 自己唸一次</h2>
+  <div class="row">
+    <select id="target"></select>
+    <button id="btnRec" disabled>● 開始錄音</button>
+    <button id="btnPlay" disabled>▶ 聽示範</button>
+  </div>
+  <div id="recMsg" class="note">載入模型後可以錄音。按一下開始，唸完再按一下停止。</div>
+  <div id="recOut"></div>
+</div>
+
+<div class="card">
+  <h2>結果（複製後貼給 Claude）</h2>
+  <div class="row"><button id="btnCopy">複製</button><span id="copyMsg" class="note"></span></div>
+  <textarea id="out" readonly></textarea>
+</div>
+</main>
+
+<script src="speech_clips.js"></script>
+<script>
+"use strict";
+const TF_URL="https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.min.js";
+const MODEL_ID="qnighy/wav2vec2-xlsr-53-espeak-cv-ft-ONNX";
+const $=id=>document.getElementById(id);
+const CLIPS=window.CLIPS||[];
+const REPORT={page:"speech.html",model:MODEL_ID,ua:navigator.userAgent,backend:null,dtype:null,loadSec:null,selftest:null,recordings:[]};
+function showReport(){$("out").value=JSON.stringify(REPORT,null,1);}
+
+/* ========== 假名 → 目標音素 ========== */
+const R1={あ:"a",い:"i",う:"u",え:"e",お:"o",か:"ka",き:"ki",く:"ku",け:"ke",こ:"ko",さ:"sa",し:"shi",す:"su",せ:"se",そ:"so",た:"ta",ち:"chi",つ:"tsu",て:"te",と:"to",な:"na",に:"ni",ぬ:"nu",ね:"ne",の:"no",は:"ha",ひ:"hi",ふ:"fu",へ:"he",ほ:"ho",ま:"ma",み:"mi",む:"mu",め:"me",も:"mo",や:"ya",ゆ:"yu",よ:"yo",ら:"ra",り:"ri",る:"ru",れ:"re",ろ:"ro",わ:"wa",を:"o",が:"ga",ぎ:"gi",ぐ:"gu",げ:"ge",ご:"go",ざ:"za",じ:"ji",ず:"zu",ぜ:"ze",ぞ:"zo",だ:"da",ぢ:"ji",づ:"zu",で:"de",ど:"do",ば:"ba",び:"bi",ぶ:"bu",べ:"be",ぼ:"bo",ぱ:"pa",ぴ:"pi",ぷ:"pu",ぺ:"pe",ぽ:"po"};
+const R2={きゃ:"kya",きゅ:"kyu",きょ:"kyo",しゃ:"sha",しゅ:"shu",しょ:"sho",ちゃ:"cha",ちゅ:"chu",ちょ:"cho",ちぇ:"che",にゃ:"nya",にゅ:"nyu",にょ:"nyo",ひゃ:"hya",ひゅ:"hyu",ひょ:"hyo",みゃ:"mya",みゅ:"myu",みょ:"myo",りゃ:"rya",りゅ:"ryu",りょ:"ryo",ぎゃ:"gya",ぎゅ:"gyu",ぎょ:"gyo",じゃ:"ja",じゅ:"ju",じょ:"jo",じぇ:"je",びゃ:"bya",びゅ:"byu",びょ:"byo",ぴゃ:"pya",ぴゅ:"pyu",ぴょ:"pyo",ふぁ:"fa",ふぃ:"fi",ふぇ:"fe",ふぉ:"fo",てぃ:"ti",でぃ:"di",うぃ:"wi",うぇ:"we"};
+const k2h=s=>s.replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+const VOW="aiueo",VOICELESS=new Set(["k","s","sh","t","ch","ts","h","f","p","ky","hy","py"]);
+/* 回傳 [{p:音素, opt:可省略}]。長音寫成兩個相同母音，促音是 Q，撥音是 N。 */
+function kanaToPhones(kana){
+  const out=[];
+  for(let w of k2h(kana).split(/[\s、。？?！!]+/)){
+    if(!w)continue;
+    if(w==="は"){out.push({p:"w"},{p:"a"});continue;}
+    if(w==="へ"){out.push({p:"e"});continue;}
+    for(let i=0;i<w.length;i++){
+      const two=w.substr(i,2);let r;
+      if(R2[two]){r=R2[two];i++;}
+      else if(w[i]==="っ"){out.push({p:"Q"});continue;}
+      else if(w[i]==="ん"){out.push({p:"N"});continue;}
+      else if(w[i]==="ー"){const last=out[out.length-1];if(last&&VOW.includes(last.p)) out.push({p:last.p});continue;}
+      else r=R1[w[i]];
+      if(!r)continue;
+      const v=r.slice(-1),c=r.slice(0,-1);
+      if(c) out.push({p:c});
+      const prev=out[out.length-1];
+      // おう→oo、うう→uu（長音）；えい 保留 e i，比對時 e 後面的 i/e 視為相同
+      if(!c&&v==="u"&&prev&&(prev.p==="o"||prev.p==="u")&&i>0) out.push({p:prev.p});
+      else out.push({p:v});
+    }
+  }
+  // 無聲化：夾在清音之間、或句尾清音後面的 i／u 常常不發出聲音，視為可省略
+  for(let i=0;i<out.length;i++){
+    const t=out[i];if(t.p!=="i"&&t.p!=="u")continue;
+    const a=out[i-1],b=out[i+1];
+    if(a&&VOICELESS.has(a.p)&&(!b||VOICELESS.has(b.p)||b.p==="Q")) t.opt=true;
+  }
+  return out;
+}
+
+/* ========== 模型輸出（IPA）→ 簡化音素 ========== */
+const MULTI=[["tɕ","ch"],["dʑ","j"],["tʃ","ch"],["dʒ","j"],["ts","ts"],["dz","z"]];
+const SINGLE={a:"a","ɑ":"a","ɐ":"a","æ":"a",i:"i","ɪ":"i","ɨ":"i",u:"u","ɯ":"u","ʊ":"u","ʉ":"u",e:"e","ɛ":"e",o:"o","ɔ":"o","ə":"ə",
+ k:"k","ɡ":"g",g:"g",s:"s","ɕ":"sh","ʃ":"sh",z:"z","ʑ":"j","ʒ":"j",t:"t",d:"d",n:"n","ɲ":"n","ɴ":"N","ŋ":"N",N:"N",m:"m",h:"h","ç":"h",x:"h","ɸ":"f",f:"f",b:"b","β":"b",v:"b",p:"p",j:"y","ɾ":"r",r:"r",l:"r","ɹ":"r","ɽ":"r","ɭ":"r",w:"w","ɰ":"w",q:"k",c:"k"};
+function normToken(tok){
+  let s=tok.normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[ᵝʰ\d.^"\[\]]/g,"");
+  if(s.length>1&&/[ptkcqsɕ]h$/.test(s)) s=s.slice(0,-1);          // kh、th、ph：送氣記號
+  const out=[];
+  while(s.length){
+    let hit=false;
+    for(const [a,b] of MULTI) if(s.startsWith(a)){out.push(b);s=s.slice(a.length);hit=true;break;}
+    if(hit)continue;
+    const ch=s[0];s=s.slice(1);
+    if(ch==="ː"||ch===":"){const last=out[out.length-1];if(last==null)continue;if(VOW.includes(last)) out.push(last);else out.splice(out.length-1,0,"Q");continue;}
+    if(ch==="ʲ"){out.push("y");continue;}
+    if(ch==="ʔ")continue;
+    out.push(SINGLE[ch]||ch);
+  }
+  return out;
+}
+function normalize(tokens){
+  const out=[];
+  for(const t of tokens) for(const p of normToken(t)) out.push(p);
+  // 合併成和目標相同的寫法：k y → ky 等拗音
+  const m=[];
+  for(let i=0;i<out.length;i++){
+    if(out[i]==="y"&&m.length&&["k","g","n","h","m","r","b","p"].includes(m[m.length-1])) m[m.length-1]+="y";
+    else m.push(out[i]);
+  }
+  return m;
+}
+
+/* ========== 對齊與回饋 ========== */
+const VPAIR={k:"g",t:"d",p:"b",s:"z",ch:"j",sh:"j",ts:"z",ky:"gy"};
+const isVoicePair=(a,b)=>VPAIR[a]===b||VPAIR[b]===a;
+function subCost(t,h,prevT){
+  if(t===h)return 0;
+  if(t==="N"&&(h==="n"||h==="m"))return 0;
+  if((t==="i"||t==="e")&&(h==="i"||h==="e")&&prevT==="e")return 0;   // えい ≈ ええ
+  if(t==="u"&&h==="o"&&prevT==="o")return 0;
+  return 1;
+}
+function align(target,heard){
+  const n=target.length,m=heard.length,D=[],B=[];
+  for(let i=0;i<=n;i++){D.push(new Array(m+1).fill(0));B.push(new Array(m+1).fill(""));}
+  for(let i=1;i<=n;i++){D[i][0]=D[i-1][0]+(target[i-1].opt?0:1);B[i][0]="d";}
+  for(let j=1;j<=m;j++){D[0][j]=j;B[0][j]="i";}
+  for(let i=1;i<=n;i++)for(let j=1;j<=m;j++){
+    const s=D[i-1][j-1]+subCost(target[i-1].p,heard[j-1],i>1?target[i-2].p:null);
+    const d=D[i-1][j]+(target[i-1].opt?0:1),ins=D[i][j-1]+1;
+    let best=s,op="s";if(d<best){best=d;op="d";}if(ins<best){best=ins;op="i";}
+    D[i][j]=best;B[i][j]=op;
+  }
+  const ops=[];let i=n,j=m;
+  while(i>0||j>0){
+    const op=B[i][j];
+    if(op==="s"){ops.push({op:subCost(target[i-1].p,heard[j-1],i>1?target[i-2].p:null)?"sub":"ok",t:target[i-1].p,h:heard[j-1],ti:i-1});i--;j--;}
+    else if(op==="d"){ops.push({op:target[i-1].opt?"skip":"del",t:target[i-1].p,ti:i-1});i--;}
+    else{ops.push({op:"ins",h:heard[j-1],ti:i});j--;}
+  }
+  ops.reverse();
+  const need=target.filter(t=>!t.opt).length||1;
+  return {cost:D[n][m],score:Math.max(0,1-D[n][m]/need),ops};
+}
+function feedback(target,res){
+  const fb=[],tp=target.map(t=>t.p);
+  for(const o of res.ops){
+    if(o.op==="del"){
+      if(o.t==="Q") fb.push({cat:"sokuon",msg:`促音沒有停頓（${tp[o.ti+1]||""} 前面要停一拍）`});
+      else if(VOW.includes(o.t)&&(tp[o.ti-1]===o.t||tp[o.ti+1]===o.t)) fb.push({cat:"long",msg:`長音不夠長（${o.t}${o.t} 要拉滿兩拍）`});
+      else fb.push({cat:"other",msg:`少了 ${o.t}`});
+    }else if(o.op==="ins"){
+      if(o.h==="Q") fb.push({cat:"sokuon",msg:"多了一個停頓（聽起來像促音）"});
+      else if(VOW.includes(o.h)&&(tp[o.ti-1]===o.h||tp[o.ti]===o.h)) fb.push({cat:"long",msg:`母音 ${o.h} 拉太長（聽起來像長音）`});
+      else fb.push({cat:"other",msg:`多了 ${o.h}`});
+    }else if(o.op==="sub"){
+      if(isVoicePair(o.t,o.h)) fb.push({cat:"voice",msg:VPAIR[o.t]===o.h?`清音 ${o.t} 聽起來像濁音 ${o.h}`:`濁音 ${o.t} 聽起來像清音 ${o.h}`});
+      else fb.push({cat:"other",msg:`${o.t} 聽起來像 ${o.h}`});
+    }
+  }
+  return fb;
+}
+const phStr=a=>a.map(t=>typeof t==="string"?t:(t.opt?"("+t.p+")":t.p)).join(" ");
+
+/* ========== 模型 ========== */
+let model=null,extractor=null,vocab=null;
+async function loadModel(){
+  const sel=$("backend").value,device=sel==="webgpu"?"webgpu":"wasm",dtype=sel==="webgpu"?"q4f16":"q4";
+  $("btnLoad").disabled=true;const t0=performance.now();
+  const say=m=>{$("loadMsg").textContent=m;};
+  try{
+    if(device==="webgpu"&&!navigator.gpu) throw new Error("這個瀏覽器沒有 WebGPU，請改選 WASM");
+    say("載入程式庫…");
+    const T=await import(TF_URL);
+    T.env.allowLocalModels=false;
+    if(location.protocol==="file:") T.env.useBrowserCache=false;     // 直接開檔案時瀏覽器不能快取模型，每次都會重新下載
+    const prog={};
+    model=await T.AutoModelForCTC.from_pretrained(MODEL_ID,{dtype,device,progress_callback:p=>{
+      if(p.status==="progress"&&p.file){prog[p.file]=p;const mb=x=>(x/1048576).toFixed(0);say(`下載模型 ${p.file}：${mb(p.loaded)} / ${mb(p.total)} MB`);}
+      else if(p.status==="done") say("下載完成，建立運算工作階段…");
+    }});
+    extractor=await T.Wav2Vec2FeatureExtractor.from_pretrained(MODEL_ID);
+    const vj=await (await fetch(`https://huggingface.co/${MODEL_ID}/resolve/main/vocab.json`)).json();
+    vocab=[];for(const [tok,i] of Object.entries(vj)) vocab[i]=tok;
+    REPORT.backend=device;REPORT.dtype=dtype;REPORT.loadSec=+((performance.now()-t0)/1000).toFixed(1);
+    say(`模型已載入（${device} / ${dtype}，${REPORT.loadSec} 秒，詞表 ${vocab.length} 個音素）`);
+    $("btnTest").disabled=false;$("btnRec").disabled=false;showReport();
+    return true;
+  }catch(e){
+    console.error(e);say("載入失敗："+(e&&e.message||e));REPORT.loadError=String(e&&e.message||e);showReport();
+    $("btnLoad").disabled=false;model=null;return false;
+  }
+}
+/* pcm: Float32Array，單聲道 16 kHz。回傳音素陣列（CTC：先合併重複，再去掉空白）。 */
+async function transcribe(pcm){
+  if(window.__fakeTranscribe) return window.__fakeTranscribe(pcm);
+  const {logits}=await model(await extractor(pcm));
+  const [,frames,size]=logits.dims,data=logits.data,out=[];
+  let prev=-1;
+  for(let t=0;t<frames;t++){
+    let best=0;const off=t*size;
+    for(let v=1;v<size;v++) if(data[off+v]>data[off+best]) best=v;
+    if(best===prev)continue;prev=best;
+    const tok=vocab[best];if(tok&&tok[0]!=="<") out.push(tok);   // 去掉 <pad>（CTC 空白）和其他特殊符號
+  }
+  return out;
+}
+function clipPcm(c){
+  const bin=atob(c.b64),n=bin.length>>1,f=new Float32Array(n);
+  for(let i=0;i<n;i++){let v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8);if(v>=32768)v-=65536;f[i]=v/32768;}
+  return f;
+}
+function playPcm(f){
+  const ac=new (window.AudioContext||window.webkitAudioContext)();
+  const b=ac.createBuffer(1,f.length,16000);b.getChannelData(0).set(f);
+  const s=ac.createBufferSource();s.buffer=b;s.connect(ac.destination);s.onended=()=>ac.close();s.start();
+}
+
+/* ========== 自我測試 ========== */
+const CAT={long:"長音",sokuon:"促音",voice:"清濁音"};
+const truthOf=c=>kanaToPhones(c.said||c.kana);
+async function selfTest(){
+  $("btnTest").disabled=true;$("tbl").hidden=false;$("summary").innerHTML="";
+  const rows=[],t0=performance.now();
+  const byPair={};for(const c of CLIPS)(byPair[c.pair]=byPair[c.pair]||[])[c.side]=c;
+  let html="<tr><th>類別</th><th>合成語音唸的</th><th>模型輸出（IPA）</th><th>簡化後</th><th>判成哪一個</th><th>和「正確版」比的回饋</th><th>秒</th></tr>";
+  for(let k=0;k<CLIPS.length;k++){
+    const c=CLIPS[k];$("testMsg").textContent=`第 ${k+1} / ${CLIPS.length} 段…`;
+    const t1=performance.now(),raw=await transcribe(clipPcm(c)),sec=(performance.now()-t1)/1000;
+    const heard=normalize(raw),pair=byPair[c.pair];
+    const sc=[0,1].map(s=>align(truthOf(pair[s]),heard));
+    const guess=sc[0].cost===sc[1].cost?-1:(sc[0].cost<sc[1].cost?0:1);
+    const tgt=truthOf(pair[0]),fb=feedback(tgt,sc[0]);
+    const row={id:c.id,type:c.type,cat:c.cat,said:c.said||c.kana,side:c.side,raw:raw.join(" "),norm:heard.join(" "),truth:phStr(truthOf(c)),guess,correct:guess===c.side,cost:[sc[0].cost,sc[1].cost],fb:fb.map(f=>f.cat+":"+f.msg),sec:+sec.toFixed(2)};
+    rows.push(row);
+    const gtxt=guess<0?"分不出來":(pair[guess].said||pair[guess].kana);
+    html+=`<tr><td>${CAT[c.cat]}</td><td>${row.said}${c.type==="sent"&&c.side===1?`<div class="note">${c.note}</div>`:""}</td><td class="mono w">${row.raw}</td><td class="mono w">${row.norm}</td><td class="${row.correct?"ok":"bad"}">${gtxt} ${row.correct?"✓":"✗"}</td><td class="w">${fb.length?fb.map(f=>f.msg).join("；"):"—"}</td><td>${row.sec}</td></tr>`;
+    $("tbl").innerHTML=html;
+    await new Promise(r=>setTimeout(r,0));
+  }
+  const total=(performance.now()-t0)/1000,audio=CLIPS.reduce((a,c)=>a+c.sec,0);
+  const sum={};
+  for(const r of rows){const key=r.type+"/"+r.cat,s=sum[key]=sum[key]||{n:0,ok:0};s.n++;if(r.correct)s.ok++;}
+  // 句子：唸錯版和正確版比，回饋裡有沒有抓到預期的那一類錯；正確版有沒有誤報
+  let hit=0,nBad=0,falseAlarm=0,nGood=0;
+  for(const r of rows) if(r.type==="sent"){
+    if(r.side===1){nBad++;if(r.fb.some(f=>f.startsWith(r.cat+":"))) hit++;}
+    else{nGood++;if(r.fb.length) falseAlarm++;}
+  }
+  const rawDiff=Object.values(byPair).filter(p=>{const a=rows.find(r=>r.id===p[0].id),b=rows.find(r=>r.id===p[1].id);return a.raw!==b.raw;}).length;
+  REPORT.selftest={totalSec:+total.toFixed(1),audioSec:+audio.toFixed(1),rtf:+(total/audio).toFixed(2),summary:sum,pairsRawDifferent:rawDiff,pairs:Object.keys(byPair).length,sentWrongDetected:hit,sentWrong:nBad,sentCorrectFalseAlarm:falseAlarm,sentCorrect:nGood,rows};
+  const line=(k,label)=>sum[k]?`<tr><td>${label}</td><td>${sum[k].ok} / ${sum[k].n}</td></tr>`:"";
+  $("summary").innerHTML=`<table style="width:auto;margin:8px 0"><tr><th>項目</th><th>判對</th></tr>
+  ${line("word/long","單字：長音")}${line("word/sokuon","單字：促音")}${line("word/voice","單字：清濁音")}
+  ${line("sent/long","句子：長音")}${line("sent/sokuon","句子：促音")}${line("sent/voice","句子：清濁音")}
+  <tr><td>兩段輸出不同的組數</td><td>${rawDiff} / ${Object.keys(byPair).length}</td></tr>
+  <tr><td>唸錯的句子有抓到預期的錯</td><td>${hit} / ${nBad}</td></tr>
+  <tr><td>正確的句子被誤報</td><td>${falseAlarm} / ${nGood}</td></tr></table>
+  <div class="note">運算 ${total.toFixed(1)} 秒，語音共 ${audio.toFixed(1)} 秒（每秒語音約需 ${(total/audio).toFixed(2)} 秒運算）。</div>`;
+  $("testMsg").textContent="完成";$("btnTest").disabled=false;showReport();
+}
+
+/* ========== 錄音 ========== */
+const TARGETS=[];
+for(const c of CLIPS) if(c.side===0||c.type==="word") TARGETS.push({label:(c.type==="word"?c.kana+"（"+c.zh+"）":c.kana.replace(/ /g,"")),kana:c.kana,clip:c});
+function fillTargets(){$("target").innerHTML=TARGETS.map((t,i)=>`<option value="${i}">${t.label}</option>`).join("");}
+let rec=null,chunks=[],recStream=null;
+async function blobToPcm16k(blob){
+  const ac=new (window.AudioContext||window.webkitAudioContext)();
+  const ab=await ac.decodeAudioData(await blob.arrayBuffer());ac.close();
+  const off=new OfflineAudioContext(1,Math.max(1,Math.ceil(ab.duration*16000)),16000);
+  const src=off.createBufferSource();src.buffer=ab;src.connect(off.destination);src.start();
+  return (await off.startRendering()).getChannelData(0);
+}
+async function toggleRec(){
+  if(rec&&rec.state==="recording"){rec.stop();return;}
+  try{recStream=await navigator.mediaDevices.getUserMedia({audio:true});}
+  catch(e){$("recMsg").textContent="拿不到麥克風："+(e.message||e);return;}
+  chunks=[];rec=new MediaRecorder(recStream);
+  rec.ondataavailable=e=>chunks.push(e.data);
+  rec.onstop=async()=>{
+    recStream.getTracks().forEach(t=>t.stop());$("btnRec").textContent="● 開始錄音";$("recMsg").textContent="辨識中…";
+    try{
+      const pcm=await blobToPcm16k(new Blob(chunks,{type:rec.mimeType}));
+      await analyse(pcm,TARGETS[+$("target").value]);
+    }catch(e){$("recMsg").textContent="處理失敗："+(e.message||e);}
+  };
+  rec.start();$("btnRec").textContent="■ 停止";$("recMsg").textContent="錄音中…唸完按停止。";
+}
+async function analyse(pcm,t){
+  const t1=performance.now(),raw=await transcribe(pcm),sec=(performance.now()-t1)/1000;
+  const heard=normalize(raw),target=kanaToPhones(t.kana),res=align(target,heard),fb=feedback(target,res);
+  $("recMsg").textContent=`完成（語音 ${(pcm.length/16000).toFixed(1)} 秒，運算 ${sec.toFixed(1)} 秒）`;
+  $("recOut").innerHTML=`<table style="margin-top:8px"><tr><th>目標</th><td class="mono w">${phStr(target)}</td></tr><tr><th>模型聽到（IPA）</th><td class="mono w">${raw.join(" ")}</td></tr><tr><th>簡化後</th><td class="mono w">${heard.join(" ")}</td></tr>
+  <tr><th>相符程度</th><td class="big">${Math.round(res.score*100)}%</td></tr><tr><th>回饋</th><td class="w">${fb.length?fb.map(f=>f.msg).join("<br>"):"沒有發現差異"}</td></tr></table>`;
+  REPORT.recordings.push({target:t.kana,raw:raw.join(" "),norm:heard.join(" "),score:+res.score.toFixed(2),fb:fb.map(f=>f.cat+":"+f.msg),audioSec:+(pcm.length/16000).toFixed(1),sec:+sec.toFixed(1)});
+  showReport();
+}
+
+$("btnLoad").addEventListener("click",loadModel);
+$("btnTest").addEventListener("click",selfTest);
+$("btnRec").addEventListener("click",toggleRec);
+$("btnPlay").addEventListener("click",()=>playPcm(clipPcm(TARGETS[+$("target").value].clip)));
+$("btnCopy").addEventListener("click",async()=>{const t=$("out");t.select();try{await navigator.clipboard.writeText(t.value);$("copyMsg").textContent="已複製";}catch(e){try{document.execCommand("copy");$("copyMsg").textContent="已複製";}catch(_){$("copyMsg").textContent="複製失敗，請手動全選複製";}}});
+fillTargets();$("btnPlay").disabled=!CLIPS.length;showReport();
+if(!CLIPS.length) $("testMsg").textContent="找不到 speech_clips.js（要和這個檔案放在同一個資料夾）";
+// 網址加 #selftest：自動載入模型並跑自我測試；#selftest-webgpu 用 WebGPU
+if(location.hash.startsWith("#selftest")){
+  if(location.hash.includes("webgpu")) $("backend").value="webgpu";
+  loadModel().then(ok=>{if(ok) selfTest();});
+}
+</script>
+</body>
+</html>

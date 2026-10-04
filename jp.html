@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Travel Japanese Probe · 旅遊日語</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1d1d1f;--mut:#6b6b70;--line:#e2e0d8;--acc:#2f6fed;--ok:#1a8f4c;--bad:#c8402f;--warn:#b7791f;--chip:#eef2fb}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1f1f23;--ink:#eeeef0;--mut:#9a9aa2;--line:#33333a;--acc:#6f9dff;--ok:#4cc47f;--bad:#f07a68;--warn:#e0a94a;--chip:#262b3a}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei","Hiragino Sans","Yu Gothic",sans-serif}
+#app{max-width:560px;margin:0 auto;padding:16px 16px 96px}
+h1{font-size:26px;margin:24px 0 4px}
+h2{font-size:20px;margin:16px 0 4px}
+h3{font-size:14px;margin:0 0 8px;color:var(--mut);font-weight:600}
+.sub{color:var(--mut);margin:0 0 16px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:12px 0}
+button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px 16px}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+button.link{border:0;background:none;color:var(--mut);padding:6px 8px;font-size:14px}
+.stack>button{display:block;width:100%;margin:10px 0}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--mut)}
+.cats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cat{padding:12px 4px;text-align:center;font-size:14px}
+.cat .big{display:block;font-size:34px;line-height:1.2}
+.cat.open{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc) inset}
+.item{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.item:first-of-type{border-top:0}
+.iname{flex:0 0 110px;font-weight:600}
+.iname span{font-size:24px;margin-right:4px;vertical-align:middle}
+.ways{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 12px;border-radius:999px;font-size:14px}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:center;gap:12px}
+.tag{display:inline-block;font-size:12px;background:var(--chip);border-radius:999px;padding:2px 10px;margin-right:6px;color:var(--mut)}
+.tag.new{color:var(--warn)}
+.jp{font-size:26px;font-weight:600;line-height:1.5}
+.kana{color:var(--mut);font-size:15px}
+.roma{color:var(--acc);font-size:15px;font-style:italic}
+.zh{font-size:18px;margin-top:6px}
+.tip{font-size:13px;color:var(--warn);margin-top:4px}
+.pw{font-size:22px;font-weight:600}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.duo button{text-align:center}
+.pick .ctx button{display:inline-block;width:auto;margin:0}
+.pick .duo button{text-align:center;margin:0}
+.re{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+.ctx{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ctx button{font-size:13px;padding:6px 12px;border-radius:999px}
+.pick button{display:block;width:100%;text-align:left;margin:8px 0}
+.pick button.right{border-color:var(--ok);color:var(--ok);opacity:1}
+.pick button.hit{border-color:var(--bad);color:var(--bad);opacity:1}
+.msg{margin:10px 0;padding:10px 12px;border-radius:12px;font-size:15px}
+.msg.good{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)}
+.msg.bad{background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad)}
+.msg.info{background:var(--chip);color:var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--mut);font-weight:600;font-size:12px}
+th,td.n{white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.meter{display:inline-block;width:40px;height:6px;border-radius:3px;background:var(--line);vertical-align:middle;margin-left:6px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--acc)}
+details{font-size:13px;color:var(--mut);margin-top:12px}
+details pre{white-space:pre-wrap;margin:6px 0 0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace}
+textarea{width:100%;height:140px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px}
+.note{font-size:13px;color:var(--mut)}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0}
+input[type=date]{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+/* ========== 內容：大類 → 場所 → 情境 ========== */
+const CATS=[
+ {id:"eat",name:"吃",icon:"🍙"},
+ {id:"move",name:"交通",icon:"🚃"},
+ {id:"shop",name:"購物",icon:"🛍️"},
+ {id:"stay",name:"住宿",icon:"🏨"}];
+const PLACES=[
+ {id:"konbini",cat:"eat",name:"便利商店",icon:"🏪"},
+ {id:"ramen",cat:"eat",name:"拉麵店",icon:"🍜"},
+ {id:"rest",cat:"eat",name:"餐廳",icon:"🍽️"},
+ {id:"cafe",cat:"eat",name:"咖啡店",icon:"☕"},
+ {id:"train",cat:"move",name:"電車",icon:"🚉"},
+ {id:"taxi",cat:"move",name:"計程車",icon:"🚕"},
+ {id:"drug",cat:"shop",name:"藥妝店",icon:"💊"},
+ {id:"clothes",cat:"shop",name:"服飾店",icon:"👕"},
+ {id:"hotel",cat:"stay",name:"飯店",icon:"🛎️"}];
+const LEAVES=[
+ {id:"konbini_pay",place:"konbini",way:"結帳"},
+ {id:"ramen_ticket",place:"ramen",way:"買餐券入座"},
+ {id:"rest_enter",place:"rest",way:"進門帶位"},
+ {id:"rest_order",place:"rest",way:"點餐結帳"},
+ {id:"cafe_order",place:"cafe",way:"點飲料"},
+ {id:"train_ticket",place:"train",way:"買票問路"},
+ {id:"taxi_ride",place:"taxi",way:"搭車"},
+ {id:"drug_taxfree",place:"drug",way:"免稅結帳"},
+ {id:"clothes_try",place:"clothes",way:"試穿"},
+ {id:"hotel_in",place:"hotel",way:"入住"},
+ {id:"hotel_bag",place:"hotel",way:"寄行李退房"}];
+/* 句庫：[種類 h=店員說 / y=你想說, 日文, 假名讀音（詞之間空一格）, 中文, 回應(日文,假名,中文)]
+   羅馬拼音由程式從假名轉出，不是手打的。 */
+const OK1=["はい、わかりました","はい、わかりました","好，我知道了"],THX=["ありがとうございます","ありがとう ございます","謝謝"],PLS=["お願いします","おねがいします","麻煩你"],HERE=["はい、どうぞ","はい、どうぞ","好，請"];
+const BANK={
+ konbini_pay:[
+  ["h","袋はご利用ですか？","ふくろ は ごりよう ですか","需要袋子嗎？",["いりません","いりません","不用了"]],
+  ["h","お弁当は温めますか？","おべんとう は あたためますか","便當要加熱嗎？",PLS],
+  ["h","お箸はお付けしますか？","おはし は おつけしますか","要附筷子嗎？",PLS],
+  ["h","ポイントカードはお持ちですか？","ぽいんとかーど は おもちですか","有集點卡嗎？",["持っていません","もっていません","我沒有"]],
+  ["y","カードで払えますか？","かーど で はらえますか","可以刷卡嗎？"]],
+ ramen_ticket:[
+  ["h","食券を先にお買い求めください。","しょっけん を さきに おかいもとめください","請先買餐券",OK1],
+  ["h","麺の硬さはどうしますか？","めん の かたさ は どうしますか","麵的硬度要怎樣？",["普通でお願いします","ふつう で おねがいします","普通就好"]],
+  ["h","こちらのお席へどうぞ。","こちら の おせき へ どうぞ","請坐這邊",THX],
+  ["y","おすすめは何ですか？","おすすめ は なんですか","推薦什麼？"],
+  ["y","お水をください。","おみず を ください","請給我水"]],
+ rest_enter:[
+  ["h","何名様ですか？","なんめいさま ですか","請問幾位？",["二人です","ふたり です","兩位"]],
+  ["h","ご予約はされていますか？","ごよやく は されていますか","有訂位嗎？",["していません","していません","沒有"]],
+  ["h","少々お待ちください。","しょうしょう おまちください","請稍等",["はい","はい","好"]],
+  ["h","カウンター席でもよろしいですか？","かうんたーせき でも よろしいですか","吧台座位可以嗎？",["はい、大丈夫です","はい、だいじょうぶです","可以，沒問題"]],
+  ["y","中国語のメニューはありますか？","ちゅうごくご の めにゅー は ありますか","有中文菜單嗎？"]],
+ rest_order:[
+  ["h","ご注文はお決まりですか？","ごちゅうもん は おきまりですか","決定好要點什麼了嗎？",["これをください","これ を ください","請給我這個"]],
+  ["h","お飲み物はいかがなさいますか？","おのみもの は いかがなさいますか","飲料要什麼？",["お水で大丈夫です","おみず で だいじょうぶです","水就可以了"]],
+  ["h","以上でよろしいですか？","いじょう で よろしいですか","這樣就好了嗎？",["はい、以上です","はい、いじょうです","對，就這些"]],
+  ["y","すみません、注文お願いします。","すみません、ちゅうもん おねがいします","不好意思，我要點餐"],
+  ["y","お会計お願いします。","おかいけい おねがいします","麻煩結帳"]],
+ cafe_order:[
+  ["h","店内でお召し上がりですか？","てんない で おめしあがりですか","內用嗎？",["持ち帰りです","もちかえり です","外帶"]],
+  ["h","サイズはいかがなさいますか？","さいず は いかがなさいますか","要哪種大小？",["Mでお願いします","えむ で おねがいします","中杯"]],
+  ["h","ホットとアイス、どちらになさいますか？","ほっと と あいす、どちら に なさいますか","熱的還是冰的？",["アイスでお願いします","あいす で おねがいします","冰的"]],
+  ["y","コーヒーを一つください。","こーひー を ひとつ ください","請給我一杯咖啡"],
+  ["y","Wi-Fiはありますか？","わいふぁい は ありますか","有 Wi-Fi 嗎？"]],
+ train_ticket:[
+  ["y","京都までいくらですか？","きょうと まで いくらですか","到京都多少錢？"],
+  ["y","この電車は新宿に行きますか？","この でんしゃ は しんじゅく に いきますか","這班車有到新宿嗎？"],
+  ["y","何番線ですか？","なんばんせん ですか","幾號月台？"],
+  ["h","三番線です。","さんばんせん です","三號月台",THX],
+  ["h","次の駅で乗り換えてください。","つぎ の えき で のりかえて ください","請在下一站轉車",OK1],
+  ["h","片道ですか、往復ですか？","かたみち ですか、おうふく ですか","單程還是來回？",["片道です","かたみち です","單程"]]],
+ taxi_ride:[
+  ["h","どちらまで行かれますか？","どちら まで いかれますか","要到哪裡？",["このホテルまでお願いします","この ほてる まで おねがいします","請到這間飯店"]],
+  ["h","シートベルトをお締めください。","しーとべると を おしめください","請繫安全帶",["はい","はい","好"]],
+  ["h","お支払いは現金ですか、カードですか？","おしはらい は げんきん ですか、かーど ですか","付現還是刷卡？",["カードでお願いします","かーど で おねがいします","刷卡"]],
+  ["y","ここで止めてください。","ここ で とめて ください","請在這裡停"],
+  ["y","トランクを開けてください。","とらんく を あけて ください","請開後車廂"]],
+ drug_taxfree:[
+  ["h","免税になさいますか？","めんぜい に なさいますか","要辦免稅嗎？",["はい、お願いします","はい、おねがいします","要，麻煩你"]],
+  ["h","パスポートをお願いします。","ぱすぽーと を おねがいします","請出示護照",HERE],
+  ["h","お支払いは一括でよろしいですか？","おしはらい は いっかつ で よろしいですか","一次付清可以嗎？",["はい、一括で","はい、いっかつ で","可以，一次付清"]],
+  ["y","これはどこにありますか？","これ は どこ に ありますか","這個在哪裡？"],
+  ["y","免税できますか？","めんぜい できますか","可以免稅嗎？"]],
+ clothes_try:[
+  ["h","何かお探しですか？","なにか おさがしですか","在找什麼嗎？",["見ているだけです","みている だけ です","我只是看看"]],
+  ["h","サイズはいかがですか？","さいず は いかがですか","尺寸還可以嗎？",["ちょっと大きいです","ちょっと おおきい です","有點大"]],
+  ["h","試着室はあちらです。","しちゃくしつ は あちら です","試衣間在那邊",THX],
+  ["y","試着してもいいですか？","しちゃく しても いいですか","可以試穿嗎？"],
+  ["y","もっと小さいサイズはありますか？","もっと ちいさい さいず は ありますか","有小一點的尺寸嗎？"]],
+ hotel_in:[
+  ["y","チェックインをお願いします。","ちぇっくいん を おねがいします","我要辦入住"],
+  ["h","パスポートを拝見してもよろしいですか？","ぱすぽーと を はいけん しても よろしいですか","可以看一下您的護照嗎？",HERE],
+  ["h","こちらにご記入ください。","こちら に ごきにゅう ください","請填寫這裡",OK1],
+  ["h","チェックアウトは十一時です。","ちぇっくあうと は じゅういちじ です","退房時間是十一點",OK1],
+  ["y","朝食は何時からですか？","ちょうしょく は なんじ から ですか","早餐幾點開始？"]],
+ hotel_bag:[
+  ["y","荷物を預かってもらえますか？","にもつ を あずかって もらえますか","可以寄放行李嗎？"],
+  ["y","チェックアウトをお願いします。","ちぇっくあうと を おねがいします","我要退房"],
+  ["h","何時ごろお戻りですか？","なんじごろ おもどりですか","大約幾點回來？",["五時ごろです","ごじごろ です","五點左右"]],
+  ["h","お荷物はいくつですか？","おにもつ は いくつですか","行李有幾件？",["二つです","ふたつ です","兩件"]],
+  ["h","こちらの番号札をお持ちください。","こちら の ばんごうふだ を おもちください","請拿好這張號碼牌",THX]]};
+const sp=k=>k.replace(/([^ 、])(ですか|です|ください)$/,"$1 $2");   // 句尾的 です／ください 分開寫，拼音比較好讀
+const PH=[];
+for(const leaf of Object.keys(BANK)) BANK[leaf].forEach((r,i)=>PH.push({id:leaf+"#"+i,leaf,k:r[0],jp:r[1],kana:sp(r[2]),zh:r[3],re:r[4]?{jp:r[4][0],kana:sp(r[4][1]),zh:r[4][2]}:null}));
+const PHX=Object.fromEntries(PH.map(p=>[p.id,p]));
+const LEAF=Object.fromEntries(LEAVES.map(l=>[l.id,l]));
+const PLACE=Object.fromEntries(PLACES.map(p=>[p.id,p]));
+const catOf=id=>PLACE[LEAF[id].place].cat;
+const pathOf=id=>{const L=LEAF[id],P=PLACE[L.place];return `${P.icon} ${P.name} · ${L.way}`;};
+
+const METHODS={
+ see:{name:"先看再聽",desc:"先看整張卡，再做小測驗"},
+ ear:{name:"先聽再猜",desc:"只聽聲音先猜意思，再看答案"},
+ echo:{name:"跟著唸",desc:"看卡、聽、開口唸出來"}};
+const EXPLORE=0.15;
+const KEY="jpprobe_v1";
+const DAY=864e5;
+const STEP_GAP={1:2,2:6};                                   // 第 1、2 次複習：隔幾題
+const TIME_GAP={3:10*60e3,4:DAY,5:3*DAY,6:7*DAY,7:14*DAY};  // 之後：隔多久
+
+/* ========== 假名 → 羅馬拼音 ========== */
+const R1={あ:"a",い:"i",う:"u",え:"e",お:"o",か:"ka",き:"ki",く:"ku",け:"ke",こ:"ko",さ:"sa",し:"shi",す:"su",せ:"se",そ:"so",た:"ta",ち:"chi",つ:"tsu",て:"te",と:"to",な:"na",に:"ni",ぬ:"nu",ね:"ne",の:"no",は:"ha",ひ:"hi",ふ:"fu",へ:"he",ほ:"ho",ま:"ma",み:"mi",む:"mu",め:"me",も:"mo",や:"ya",ゆ:"yu",よ:"yo",ら:"ra",り:"ri",る:"ru",れ:"re",ろ:"ro",わ:"wa",を:"o",ん:"n",が:"ga",ぎ:"gi",ぐ:"gu",げ:"ge",ご:"go",ざ:"za",じ:"ji",ず:"zu",ぜ:"ze",ぞ:"zo",だ:"da",ぢ:"ji",づ:"zu",で:"de",ど:"do",ば:"ba",び:"bi",ぶ:"bu",べ:"be",ぼ:"bo",ぱ:"pa",ぴ:"pi",ぷ:"pu",ぺ:"pe",ぽ:"po"};
+const R2={きゃ:"kya",きゅ:"kyu",きょ:"kyo",しゃ:"sha",しゅ:"shu",しょ:"sho",ちゃ:"cha",ちゅ:"chu",ちょ:"cho",ちぇ:"che",にゃ:"nya",にゅ:"nyu",にょ:"nyo",ひゃ:"hya",ひゅ:"hyu",ひょ:"hyo",みゃ:"mya",みゅ:"myu",みょ:"myo",りゃ:"rya",りゅ:"ryu",りょ:"ryo",ぎゃ:"gya",ぎゅ:"gyu",ぎょ:"gyo",じゃ:"ja",じゅ:"ju",じょ:"jo",びゃ:"bya",びゅ:"byu",びょ:"byo",ぴゃ:"pya",ぴゅ:"pyu",ぴょ:"pyo",ふぁ:"fa",ふぃ:"fi",ふぇ:"fe",ふぉ:"fo",てぃ:"ti",でぃ:"di",うぃ:"wi",うぇ:"we"};
+const k2h=s=>s.replace(/[\u30a1-\u30f6]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+function romaji(kana){
+  return k2h(kana).split(" ").map(w=>{
+    if(w==="は")return "wa";if(w==="へ")return "e";if(w==="を")return "o";
+    let o="",dbl=false;
+    for(let i=0;i<w.length;i++){
+      const two=w.substr(i,2);let r;
+      if(R2[two]){r=R2[two];i++;}
+      else if(w[i]==="っ"){dbl=true;continue;}
+      else if(w[i]==="ー"){o+=o.slice(-1);continue;}
+      else if(w[i]==="、"){o+=", ";continue;}
+      else r=R1[w[i]]||w[i];
+      if(dbl){r=(r[0]==="c"?"t":r[0])+r;dbl=false;}
+      o+=r;
+    }
+    return o;
+  }).join(" ");
+}
+
+/* 從假名自動找出促音和長音，給發音提示 */
+const LONG_RE=/ー|[おこそとのほもよろごぞどぼぽょ]う|[うくすつぬふむゆるぐずづぶぷゅ]う|[おこそとのほもよろ]お|[あかさたなはまやらわがざだばぱゃ]あ|[いきしちにひみりぎじびぴ]い|[えけせてねへめれげぜでべぺ]え/;
+function tips(kana){
+  const out=[];
+  for(const w of k2h(kana).split(/[ 、]/)){
+    if(!w)continue;const t=[];
+    if(w.includes("っ")) t.push("小っ停一拍");
+    if(LONG_RE.test(w)) t.push("母音拉長一拍");
+    if(t.length) out.push(`${romaji(w)}（${t.join("、")}）`);
+  }
+  return out.length?`<div class="tip">發音提示：${out.join("　")}</div>`:"";
+}
+
+/* ========== 發音基礎：說明 + 最小對比 ========== */
+const PRON=[
+ {id:"long",name:"長音",how:"母音多拉一拍，中間不要斷開。羅馬拼音會看到 aa、ii、uu、ou、oo。長短不同，意思就不同。",
+  pairs:[["おばさん","阿姨","おばあさん","奶奶"],["おじさん","叔叔","おじいさん","爺爺"],["ビル","大樓","ビール","啤酒"],["ここ","這裡","こうこう","高中"],["ゆき","雪","ゆうき","勇氣"]]},
+ {id:"sokuon",name:"促音（小っ）",how:"看到小っ，嘴巴先擺好下一個音的位置，停一拍不出聲，再把音發出來。羅馬拼音寫成兩個相同的子音（kk、tt、pp）。",
+  pairs:[["きて","來","きって","郵票"],["おと","聲音","おっと","丈夫"],["さか","坡道","さっか","作家"],["かこ","過去","かっこ","括號"],["いち","一","いっち","一致"]]},
+ {id:"voice",name:"清音和濁音",how:"日語的清音（か、た、ぱ行）和濁音（が、だ、ば行）差在聲帶：濁音從一開始聲帶就在震動。中文的ㄅ和ㄆ差的是送不送氣，兩個聲帶都不震動，所以用中文的習慣去聽，詞中間的清音很容易聽成濁音。發清音時不要用力送氣；發濁音時喉嚨先出聲。",
+  pairs:[["かき","柿子","かぎ","鑰匙"],["また","又","まだ","還沒"],["いと","線","いど","井"],["あける","打開","あげる","給"],["てんき","天氣","でんき","電燈"],["たいがく","退學","だいがく","大學"]]}];
+const PRON_N=8;
+
+/* ========== 狀態 ========== */
+function fresh(){return {v:1,picked:[],leaf:{},method:{see:{a:2,b:1,n:0},ear:{a:1,b:1,n:0},echo:{a:1,b:1,n:0}},ph:{},attn:[],attnEst:8,count:0,lastM:null,prevM:null,trip:"",romaji:true,started:false,log:[],rp:{},pron:{},sp:{n:0,ok:0},pronSeen:false};}
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));return s&&s.v===1?s:null;}catch(e){return null;}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+let S=load()||fresh();
+S.rp=S.rp||{};S.pron=S.pron||{};S.sp=S.sp||{n:0,ok:0};
+function lst(id){return S.leaf[id]||(S.leaf[id]={a:S.picked.includes(id)?2:1,b:1,n:0,last:-99,blocked:false,swaps:0,likes:0});}
+
+/* ========== 語音 ========== */
+const hasTTS="speechSynthesis" in window;
+let jaVoice=null;
+function loadVoices(){try{jaVoice=speechSynthesis.getVoices().find(v=>/^ja([-_]|$)/i.test(v.lang))||null;}catch(e){}}
+if(hasTTS){loadVoices();try{speechSynthesis.onvoiceschanged=loadVoices;}catch(e){}}
+function speakSeq(arr,rate){
+  if(!hasTTS)return false;
+  try{speechSynthesis.cancel();for(const t of arr){const u=new SpeechSynthesisUtterance(t);u.lang="ja-JP";if(jaVoice)u.voice=jaVoice;u.rate=rate||1;speechSynthesis.speak(u);}return true;}catch(e){return false;}
+}
+function speak(text,rate){return speakSeq([text],rate);}
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function norm(s){return s.replace(/[\s、。？?！!，,．.・〜~ー\-]/g,"").replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60)).toLowerCase();}
+function lcs(a,b){const m=a.length,n=b.length;let prev=new Array(n+1).fill(0);for(let i=1;i<=m;i++){const cur=[0];for(let j=1;j<=n;j++)cur[j]=a[i-1]===b[j-1]?prev[j-1]+1:Math.max(prev[j],cur[j-1]);prev=cur;}return prev[n];}
+function sim(a,b){a=norm(a);b=norm(b);if(!a.length||!b.length)return 0;return 2*lcs(a,b)/(a.length+b.length);}
+
+/* ========== 選擇邏輯 ========== */
+function ri(lo,hi){return lo+Math.floor(Math.random()*(hi-lo+1));}
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=ri(0,i);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function gauss(){let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random());}
+function sampleBeta(a,b){const m=a/(a+b),v=a*b/((a+b)*(a+b)*(a+b+1));return Math.min(1,Math.max(0,m+Math.sqrt(v)*gauss()));}
+function pickMethod(){
+  let best=null,bs=-1;const why=[];
+  for(const k of Object.keys(METHODS)){
+    const m=S.method[k];let s=sampleBeta(m.a,m.b),pen=1;
+    if(k===S.lastM) pen=(k===S.prevM)?0.6:0.85;
+    s*=pen;why.push(`${METHODS[k].name}：抽樣 ${s.toFixed(2)}（平均 ${(m.a/(m.a+m.b)).toFixed(2)}，計分 ${m.n} 次${pen<1?"，連用扣分 ×"+pen:""}）`);
+    if(s>bs){bs=s;best=k;}
+  }
+  S.prevM=S.lastM;S.lastM=best;
+  return {k:best,why:why.join("\n")};
+}
+function recency(id){return 1-Math.pow(0.5,(S.count-lst(id).last)/2);}
+function remaining(leaf){return PH.filter(p=>p.leaf===leaf&&!(S.ph[p.id]&&S.ph[p.id].st>0));}
+function pickNew(exclude){
+  const okId=id=>!lst(id).blocked&&id!==exclude&&remaining(id).length>0;
+  const cats=new Set(S.picked.map(catOf));
+  const sib=LEAVES.map(L=>L.id).filter(id=>cats.has(catOf(id))&&!S.picked.includes(id)&&okId(id));
+  if(sib.length&&Math.random()<EXPLORE){const id=sib[ri(0,sib.length-1)];return {ph:remaining(id)[0],explore:true,why:"探索：試一個同大類、你沒選過的場景"};}
+  let pool=S.picked.filter(okId);
+  if(!pool.length) pool=S.picked.filter(id=>!lst(id).blocked&&remaining(id).length>0);
+  if(!pool.length){if(sib.length){const id=sib[ri(0,sib.length-1)];return {ph:remaining(id)[0],explore:true,why:"選的場景都教完了，試同大類的其他場景"};}return null;}
+  let best=null,bs=-1;const why=[];
+  for(const id of pool){
+    const q=lst(id),rc=recency(id),s=sampleBeta(q.a,q.b)*rc;
+    why.push(`${pathOf(id)}：${s.toFixed(2)}（喜好 ${(q.a/(q.a+q.b)).toFixed(2)} × 新鮮度 ${rc.toFixed(2)}）`);
+    if(s>bs){bs=s;best=id;}
+  }
+  return {ph:remaining(best)[0],explore:false,why:why.join("\n")};
+}
+function makeOpts(ph,field){   // 3 個選項：同場景的優先當干擾項
+  const pool=PH.filter(p=>p.id!==ph.id&&p.k===ph.k&&p[field]!==ph[field]);
+  const d=[];
+  for(const p of shuffle(pool.filter(p=>p.leaf===ph.leaf)).concat(shuffle(pool.filter(p=>p.leaf!==ph.leaf)))){
+    if(d.length>=2)break;if(!d.some(x=>x[field]===p[field])) d.push(p);
+  }
+  return shuffle([ph].concat(d));
+}
+function schedule(q){
+  if(q.st<=2){q.dueStep=S.count+STEP_GAP[q.st];q.dueAt=0;return;}
+  let iv=TIME_GAP[Math.min(q.st,7)];
+  if(S.trip){const left=new Date(S.trip+"T00:00:00").getTime()-Date.now();if(left>0) iv=Math.min(iv,Math.max(4*36e5,left/2));}  // 出發日越近，間隔越短
+  q.dueStep=0;q.dueAt=Date.now()+iv;
+}
+
+/* ========== 畫面 ========== */
+const app=document.getElementById("app");
+const ACT={};
+let pickSel=null,pickOpen=null,ses=null,cur=null;
+function h(html){app.innerHTML=html;}
+app.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b||b.disabled)return;const f=ACT[b.dataset.act];if(f)f(b.dataset);});
+app.addEventListener("change",e=>{const t=e.target;if(t.id==="trip"){S.trip=t.value||"";save();}if(t.id==="roma"){S.romaji=t.checked;save();}});
+const good=t=>`<div class="msg good">${t}</div>`,bad=t=>`<div class="msg bad">${t}</div>`,info=t=>`<div class="msg info">${t}</div>`;
+
+function home(){
+  ses=null;cur=null;
+  const v=!hasTTS?"這個瀏覽器不支援語音合成，聽不到日語。":jaVoice?`日語語音：${jaVoice.name}`:"還沒偵測到日語語音（有些裝置仍可播放，請按下面測試）";
+  h(`<h1>旅遊日語</h1><p class="sub">從你會去的場景開始，先練聽懂店員說什麼。資料只存在這台裝置。</p>
+  <div class="card"><div class="note">${v}</div><div class="ctx"><button data-act="test">▶ 測試聲音</button></div></div>
+  <div class="stack">${S.started
+    ?`<button class="primary" data-act="go">繼續學習</button><button data-act="pron">發音基礎</button><button data-act="dash">我的資料</button><button data-act="pick">重新選場景</button><button class="link" data-act="reset">全部重來</button>`
+    :`<button class="primary" data-act="pick">開始</button><button data-act="pron">發音基礎</button>`}</div>`);
+}
+ACT.test=()=>speak("こんにちは。よろしくお願いします。",0.9);
+ACT.reset=()=>{if(confirm("清除這台裝置上的所有學習資料？")){S=fresh();save();home();}};
+ACT.dash=()=>dash();
+ACT.home=()=>home();
+ACT.go=()=>startSession();
+
+/* ----- 場景選擇 ----- */
+ACT.pick=()=>{pickSel=new Set(S.picked);pickOpen=new Set(S.picked.map(catOf));renderPick();};
+function renderPick(){
+  const n=pickSel.size;
+  h(`<h2>這趟會遇到哪些場景？</h2><p class="sub">點開大類，選你真的會去的（至少 2 個）。</p>
+  <div class="cats">${CATS.map(c=>`<button class="cat ${pickOpen.has(c.id)?"open":""}" data-act="cat" data-id="${c.id}"><span class="big">${c.icon}</span>${c.name}</button>`).join("")}</div>
+  ${CATS.filter(c=>pickOpen.has(c.id)).map(c=>`<div class="card"><h3>${c.icon} ${c.name}</h3>${PLACES.filter(p=>p.cat===c.id).map(p=>`<div class="item"><div class="iname"><span>${p.icon}</span>${p.name}</div><div class="ways">${LEAVES.filter(L=>L.place===p.id).map(L=>`<button class="chip ${pickSel.has(L.id)?"on":""}" data-act="leaf" data-id="${L.id}">${L.way}</button>`).join("")}</div></div>`).join("")}</div>`).join("")}
+  <div class="card"><div class="row"><label for="trip">出發日（可不填）</label><input id="trip" type="date" value="${S.trip||""}"></div>
+  <div class="row"><label><input id="roma" type="checkbox" ${S.romaji?"checked":""}> 顯示羅馬拼音</label></div></div>
+  <div class="bar"><span>已選 ${n} 個</span><button class="primary" data-act="pickdone" ${n<2?"disabled":""}>下一步</button></div>`);
+}
+ACT.cat=d=>{pickOpen.has(d.id)?pickOpen.delete(d.id):pickOpen.add(d.id);renderPick();};
+ACT.leaf=d=>{pickSel.has(d.id)?pickSel.delete(d.id):pickSel.add(d.id);renderPick();};
+ACT.pickdone=()=>{
+  S.picked=[...pickSel];
+  for(const id of S.picked){const q=lst(id);q.blocked=false;if(q.n===0){q.a=2;q.b=1;}}
+  S.started=true;
+  if(!S.pronSeen){
+    S.pronSeen=true;save();
+    return h(`<h2>先學發音基礎？</h2><p class="sub">長音、促音、清濁音三個重點，各有說明和聽辨練習，全部約 5 分鐘。之後也可以從首頁進來。</p>
+    <div class="stack"><button class="primary" data-act="pron">先學發音</button><button data-act="go">直接開始學句子</button></div>`);
+  }
+  save();startSession();
+};
+
+/* ----- 學習 ----- */
+function startSession(){ses={t0:Date.now(),times:[],drift:null,asked:false,hidden:0};step();}
+function elapsedMin(){return (Date.now()-ses.t0)/60000;}
+function active(id){return !lst(PHX[id].leaf).blocked;}
+function step(){
+  if(!ses.asked&&ses.times.length>0&&elapsedMin()>=S.attnEst){
+    ses.asked=true;
+    return h(`<h2>已經學了 ${Math.round(elapsedMin())} 分鐘</h2><p class="sub">要休息一下嗎？</p><div class="stack"><button class="primary" data-act="rest">休息</button><button data-act="more">再學一下</button></div>`);
+  }
+  const now=Date.now(),items=pending();
+  const byDue=(a,b)=>(a.q.dueStep-b.q.dueStep)||(a.q.dueAt-b.q.dueAt);
+  const due=items.filter(x=>S.count>=x.q.dueStep&&now>=x.q.dueAt).sort(byDue);
+  if(due.length) return startDue(due[0]);
+  const t=pickNew(null);
+  if(t) return startTeach(t,null);
+  const soon=items.filter(x=>x.q.dueAt===0).sort(byDue);   // 沒有新句子了：把還在排隊的提前複習
+  if(soon.length) return startDue(soon[0]);
+  allDone();
+}
+function pending(){   // 所有排了複習的項目：句子本身（r:false）和店員句的回應練習（r:true）
+  const items=[];
+  for(const id of Object.keys(S.ph)) if(PHX[id]&&S.ph[id].st>0&&active(id)) items.push({id,r:false,q:S.ph[id]});
+  for(const id of Object.keys(S.rp)) if(PHX[id]&&PHX[id].re&&active(id)) items.push({id,r:true,q:S.rp[id]});
+  return items;
+}
+function startDue(x){
+  if(x.r) return startSpeak(x.id,true);
+  if(PHX[x.id].k==="y"&&x.q.st>=2) return startSpeak(x.id,false);   // 「你想說」：第一次用選的，之後改成開口說
+  startCheck(x.id);
+}
+function startSpeak(id,isReply){
+  const ph=PHX[id],tgt=isReply?ph.re:ph,m=S.ph[id].m;
+  cur={mode:"speak",ph,tgt,isReply,explore:false,method:m,lWhy:"到了該複習的時間",mWhy:isReply?"回應練習：聽店員的問句，開口說出回應（不計入教法分數）":`這句已經選對過，這次改成開口說。當初用「${METHODS[m].name}」教的，結果會算進那個教法的分數${S.ph[id].fails>0?"（答錯過的句子不再計分）":""}`,ui:"ask",heard:"",micOn:false,fin:false,msg:"",t0:Date.now()};
+  render();if(isReply) speak(ph.jp,1);
+}
+function ansHtml(t){
+  return `<div class="card"><h3>答案</h3><div class="jp">${t.jp}</div><div class="kana">${t.kana}</div>${S.romaji?`<div class="roma">${romaji(t.kana)}</div>`:""}${tips(t.kana)}
+  <div class="ctx"><button data-act="say" data-r="0.9">▶ 聽</button><button data-act="say" data-r="0.6">🐢 慢速</button></div></div>`;
+}
+function renderSpeak(){
+  const ph=cur.ph,t=cur.tgt;
+  let html=`<div class="top"><span>第 ${S.count+(cur.fin?0:1)} 題 · 開口說</span><button class="link" data-act="end">結束</button></div>
+  <div style="margin-top:8px"><span class="tag">${pathOf(ph.leaf)}</span></div>
+  <div class="card">${cur.isReply?`<h3>店員說了一句（只聽）</h3><div class="ctx" style="margin:0 0 10px"><button data-act="sayq">▶ 再聽一次</button></div>`:""}
+  <div class="zh">你想${cur.isReply?"回答":"說"}：「${t.zh}」</div>
+  ${cur.ui==="ask"?`<div class="note" style="margin-top:6px">先開口把日文說出來，再看答案。</div><div class="ctx">${SR?`<button data-act="mic" ${cur.micOn?"disabled":""}>${cur.micOn?"聆聽中…":"🎤 按下後開始說"}</button>`:""}<button data-act="reveal">我說了，看答案</button></div>`:""}
+  ${cur.heard?`<div class="note" style="margin-top:8px">${cur.heard}</div>`:""}</div>`;
+  if(cur.ui!=="ask"){
+    html+=ansHtml(t);
+    if(cur.ui==="shown") html+=`<div class="card"><h3>你剛才說的和答案一樣嗎？</h3><div class="duo"><button data-act="grade" data-ok="1">✓ 一樣</button><button data-act="grade" data-ok="0">✗ 沒說出來／不一樣</button></div></div>`;
+    else html+=cur.msg+`<div class="stack"><button class="primary" data-act="next">下一題</button></div>`;
+  }
+  html+=`<details><summary>系統為什麼出這題</summary><pre>${cur.mWhy}\n\n${cur.lWhy}</pre></details>`;
+  h(html);
+}
+ACT.sayq=()=>speak(cur.ph.jp,1);
+ACT.reveal=()=>{cur.ui="shown";render();speak(cur.tgt.jp,0.9);};
+ACT.grade=d=>{
+  const ok=d.ok==="1";finishSpeak(ok);
+  cur.msg=ok?good("好，間隔會拉長。"):info("沒關係，再聽幾次，過兩題會再出一次。");
+  cur.ui="done";render();
+};
+function finishSpeak(ok){
+  if(cur.fin)return;cur.fin=true;
+  const t=timing(),q=cur.isReply?S.rp[cur.ph.id]:S.ph[cur.ph.id];S.count++;q.n++;
+  let r=null;
+  if(!cur.isReply&&q.fails===0){r=ok?0.85:0;const m=S.method[q.m];m.a+=r;m.b+=1-r;m.n++;}
+  const from=q.st;
+  if(ok){q.ok++;q.st=Math.min(7,q.st+1);}else{q.fails++;q.st=cur.isReply?1:2;}
+  schedule(q);
+  if(!ok){q.dueStep=S.count+STEP_GAP[1];q.dueAt=0;}
+  S.sp.n++;if(ok) S.sp.ok++;
+  S.log.push({at:Date.now(),id:cur.ph.id,type:cur.isReply?"reply":"say",method:q.m||null,from,to:q.st,ok,sec:+t.toFixed(1),reward:r==null?null:+r.toFixed(2)});
+  if(S.log.length>400) S.log.shift();
+  save();
+}
+function startTeach(t,keep){
+  const m=keep||pickMethod();
+  cur={mode:"teach",ph:t.ph,explore:t.explore,lWhy:t.why,method:m.k,mWhy:m.why,m,ui:m.k==="ear"?"quiz":"card",opts:makeOpts(t.ph,"zh"),pick:null,echoN:0,heard:"",micOn:false,liked:false,fin:false,msg:"",t0:Date.now()};
+  render();speak(cur.ph.jp,0.9);
+}
+function startCheck(id){
+  const ph=PHX[id];
+  cur={mode:"check",ph,explore:false,lWhy:"到了該複習的時間",method:S.ph[id].m,mWhy:`這句當初用「${METHODS[S.ph[id].m].name}」教的，這次的結果會算進那個教法的分數${S.ph[id].fails>0?"（答錯過的句子不再計分）":""}`,ui:"quiz",opts:makeOpts(ph,ph.k==="y"?"jp":"zh"),pick:null,fin:false,msg:"",t0:Date.now()};
+  render();if(ph.k==="h") speak(ph.jp,1);
+}
+function cardHtml(ph){
+  return `<div class="card"><h3>${ph.k==="h"?"店員說":"你想說"}</h3><div class="jp">${ph.jp}</div><div class="kana">${ph.kana}</div>${S.romaji?`<div class="roma">${romaji(ph.kana)}</div>`:""}${tips(ph.kana)}<div class="zh">${ph.zh}</div>
+  <div class="ctx"><button data-act="say" data-r="0.9">▶ 聽</button><button data-act="say" data-r="0.6">🐢 慢速</button></div>
+  ${ph.re?`<div class="re"><h3>可以這樣回</h3><div><b>${ph.re.jp}</b>${S.romaji?`　<span class="roma">${romaji(ph.re.kana)}</span>`:""}　${ph.re.zh} <button class="link" data-act="sayre">▶</button></div>${tips(ph.re.kana)}</div>`:""}</div>`;
+}
+function quizHtml(){
+  const ph=cur.ph,jpOpts=cur.mode==="check"&&ph.k==="y";
+  const q=jpOpts?`你想說：「${ph.zh}」　要選哪一句？`:cur.mode==="check"?"這句是什麼意思？（只聽，不看字）":cur.method==="ear"?"先聽，猜猜看是什麼意思（猜錯沒關係）":"剛才那句是什麼意思？";
+  return `<div class="card pick"><h3>${q}</h3>${jpOpts?"":`<div class="ctx"><button data-act="say" data-r="${cur.mode==="check"?1:0.9}">▶ 再聽一次</button></div>`}
+  ${cur.opts.map(o=>{const c=cur.pick?(o.id===ph.id?"right":o.id===cur.pick?"hit":""):"";return `<button data-act="opt" data-id="${o.id}" class="${c}" ${cur.pick?"disabled":""}>${jpOpts?`${o.jp}${S.romaji?`<br><span class="roma">${romaji(o.kana)}</span>`:""}`:o.zh}</button>`;}).join("")}</div>`;
+}
+function render(){
+  if(cur.mode==="speak") return renderSpeak();
+  const ph=cur.ph,teach=cur.mode==="teach",m=cur.method;
+  let html=`<div class="top"><span>第 ${S.count+(cur.fin?0:1)} 題 · ${teach?"新句子 · "+METHODS[m].name:"複習"}</span><button class="link" data-act="end">結束</button></div>`;
+  html+=`<div style="margin-top:8px"><span class="tag">${pathOf(ph.leaf)}</span>${cur.explore?`<span class="tag new">試試新場景</span>`:""}</div>`;
+  if(teach) html+=`<div class="ctx"><button data-act="like" ${cur.liked?"disabled":""}>👍 這個場景我用得到</button>${cur.fin?"":`<button data-act="swap">🔄 換一個場景</button><button data-act="block">🚫 不要再出這個場景</button>`}</div>`;
+  if(cur.ui==="card"){
+    html+=cardHtml(ph);
+    if(m==="see") html+=`<div class="stack"><button class="primary" data-act="quiz">記住了，小測驗</button></div>`;
+    if(m==="echo"){
+      html+=`<div class="card"><h3>聽完之後開口唸一次</h3><div class="ctx">${SR?`<button data-act="mic" ${cur.micOn?"disabled":""}>${cur.micOn?"聆聽中…":"🎤 按下後開始唸"}</button>`:""}<button data-act="echoed">我唸了（不用麥克風）</button></div>${cur.heard?`<div class="note" style="margin-top:8px">${cur.heard}</div>`:""}</div>`;
+      if(cur.echoN>0) html+=`<div class="stack"><button class="primary" data-act="next">下一題</button></div>`;
+    }
+  }else if(cur.ui==="quiz"){
+    html+=quizHtml();
+  }else{
+    html+=quizHtml()+cur.msg+cardHtml(ph)+`<div class="stack"><button class="primary" data-act="next">下一題</button></div>`;
+  }
+  html+=`<details><summary>系統為什麼出這題</summary><pre>教法\n${cur.mWhy}\n\n場景\n${cur.lWhy}</pre></details>`;
+  h(html);
+}
+ACT.say=d=>speak(cur.mode==="speak"?cur.tgt.jp:cur.ph.jp,+d.r||1);
+ACT.sayre=()=>{if(cur.ph.re) speak(cur.ph.re.jp,0.9);};
+ACT.quiz=()=>{cur.ui="quiz";render();speak(cur.ph.jp,0.9);};
+ACT.opt=d=>{
+  if(cur.pick)return;
+  cur.pick=d.id;const ok=d.id===cur.ph.id;
+  if(cur.mode==="teach"){
+    cur.msg=ok?good(cur.method==="ear"?"猜對了！":"對！"):cur.method==="ear"?info("沒關係，看一下答案。"):bad("不是這個，再看一次卡片。");
+    cur.quizOk=ok;finishTeach();
+  }else{
+    cur.msg=ok?good("答對了！"):bad("答錯了，這句過兩題會再出一次。");
+    finishCheck(ok);
+  }
+  cur.ui="done";render();
+  if(cur.mode==="teach"&&cur.ph.re) speakSeq([cur.ph.jp,cur.ph.re.jp],0.9);else speak(cur.ph.jp,0.9);
+};
+ACT.echoed=()=>{cur.echoN++;render();};
+ACT.mic=()=>{
+  if(!SR||cur.micOn)return;
+  const mine=cur,tgt=mine.mode==="speak"?mine.tgt:mine.ph;let r,got=false;
+  const fallback=mine.mode==="speak"?"按「我說了，看答案」就好。":"按「我唸了」就好。";
+  try{r=new SR();}catch(e){mine.heard="這個瀏覽器不能用語音辨識，"+fallback;return render();}
+  r.lang="ja-JP";r.interimResults=false;r.maxAlternatives=3;
+  r.onresult=e=>{
+    if(cur!==mine)return;
+    const alts=Array.from(e.results[0]).map(a=>a.transcript);
+    const sc=Math.max(...alts.map(a=>Math.max(sim(a,tgt.jp),sim(a,tgt.kana))));
+    got=true;if(mine.mode!=="speak") mine.echoN++;
+    mine.heard=`裝置聽到：「${alts[0]}」　${sc>=0.6?"✓ 和原句接近":"和原句差比較多"}（裝置只是把聲音轉成字，不能判斷發音好壞）`;
+  };
+  r.onerror=e=>{if(cur!==mine)return;mine.heard=e.error==="no-speech"?"沒有聽到聲音，再試一次。":"麥克風或語音辨識不能用（"+e.error+"），"+fallback;};
+  r.onend=()=>{
+    if(cur!==mine)return;mine.micOn=false;
+    if(got&&mine.mode==="speak"&&mine.ui==="ask"){mine.ui="shown";render();speak(tgt.jp,0.9);}else render();
+  };
+  try{r.start();mine.micOn=true;render();}catch(e){mine.heard="語音辨識啟動失敗，"+fallback;render();}
+};
+function median(a){const s=a.slice().sort((x,y)=>x-y),n=s.length;return n?(n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2):0;}
+function timing(){
+  const t=(Date.now()-cur.t0)/1000;
+  if(ses.times.length>=3){const md=median(ses.times);if(ses.drift==null&&t>30&&t>2.5*md) ses.drift=+elapsedMin().toFixed(1);}
+  ses.times.push(t);return t;
+}
+function finishTeach(){
+  if(cur.fin)return;cur.fin=true;
+  timing();S.count++;
+  S.ph[cur.ph.id]={st:1,dueStep:S.count+STEP_GAP[1],dueAt:0,m:cur.method,n:0,ok:0,fails:0};
+  const q=lst(cur.ph.leaf),r=cur.liked?1:0.6;q.n++;q.last=S.count;q.a+=r;q.b+=1-r;
+  save();
+}
+function finishCheck(ok){
+  if(cur.fin)return;cur.fin=true;
+  const t=timing(),q=S.ph[cur.ph.id];S.count++;q.n++;
+  let r=null;
+  if(q.fails===0){   // 只用「沒答錯過」的句子來評教法，避免重學的效果混進來
+    const speed=Math.min(1,Math.max(0,1-(t-6)/20));r=ok?0.7+0.3*speed:0;
+    const m=S.method[q.m];m.a+=r;m.b+=1-r;m.n++;
+  }
+  const from=q.st;
+  if(ok){q.ok++;q.st=Math.min(7,q.st+1);}else{q.fails++;q.st=1;}
+  schedule(q);
+  if(ok&&cur.ph.k==="h"&&cur.ph.re&&!S.rp[cur.ph.id]) S.rp[cur.ph.id]={st:1,dueStep:S.count+STEP_GAP[1],dueAt:0,n:0,ok:0,fails:0};   // 聽懂之後，開始練開口回應
+  S.log.push({at:Date.now(),id:cur.ph.id,type:"check",method:q.m,from,to:q.st,ok,sec:+t.toFixed(1),reward:r==null?null:+r.toFixed(2)});
+  if(S.log.length>400) S.log.shift();
+  save();
+}
+ACT.like=()=>{
+  if(cur.liked)return;cur.liked=true;const id=cur.ph.leaf,q=lst(id);q.likes++;
+  if(cur.fin){q.a+=0.4;q.b=Math.max(0.1,q.b-0.4);}
+  if(!S.picked.includes(id)) S.picked.push(id);
+  save();render();
+};
+function reTeach(){const t=pickNew(cur.ph.leaf);if(t) startTeach(t,cur.m);else step();}
+ACT.swap=()=>{const q=lst(cur.ph.leaf);q.swaps++;q.b+=1;q.last=S.count;save();reTeach();};
+ACT.block=()=>{const id=cur.ph.leaf;lst(id).blocked=true;S.picked=S.picked.filter(x=>x!==id);save();reTeach();};
+ACT.next=()=>{if(cur.mode==="teach"&&!cur.fin) finishTeach();step();};
+ACT.more=()=>{S.attnEst=Math.min(30,+(S.attnEst*1.15).toFixed(1));save();step();};
+ACT.rest=()=>endSession("break");
+ACT.end=()=>endSession("user");
+function closeSession(reason){
+  if(!ses)return;
+  const dur=+elapsedMin().toFixed(1),items=ses.times.length;
+  if(items>0){
+    S.attn.push({at:Date.now(),min:dur,items,drift:ses.drift,hidden:ses.hidden,reason});
+    if(S.attn.length>50) S.attn.shift();
+    if(items>=4&&dur>=2&&reason!=="done"){const target=Math.max(3,ses.drift!=null?ses.drift:dur);S.attnEst=+(0.6*S.attnEst+0.4*target).toFixed(1);}
+  }
+  save();ses=null;cur=null;
+  if(hasTTS){try{speechSynthesis.cancel();}catch(e){}}
+}
+function endSession(reason){closeSession(reason);dash();}
+function fmtWhen(ms){const d=ms-Date.now();if(d<=0)return "現在";if(d<36e5)return `約 ${Math.max(1,Math.round(d/6e4))} 分鐘後`;if(d<DAY)return `約 ${Math.round(d/36e5)} 小時後`;return `約 ${Math.round(d/DAY)} 天後`;}
+function allDone(){
+  const nexts=pending().map(x=>x.q.dueAt).filter(x=>x>0);
+  closeSession("done");
+  h(`<h2>目前沒有要練的了</h2><p class="sub">選的場景都教過了，下一次複習：${nexts.length?fmtWhen(Math.min(...nexts)):"—"}</p>
+  <div class="stack"><button class="primary" data-act="pick">加選其他場景</button><button data-act="dash">我的資料</button><button class="link" data-act="home">回首頁</button></div>`);
+}
+document.addEventListener("visibilitychange",()=>{if(ses&&document.hidden) ses.hidden++;});
+
+/* ----- 發音基礎 ----- */
+let pr=null;
+const PRX=Object.fromEntries(PRON.map(t=>[t.id,t]));
+function wordBtn(w,zh,act,extra){return `<button data-act="${act}" ${extra||""}><div class="pw">${w}</div><div class="roma">${romaji(w)}</div><div class="note">${zh}</div></button>`;}
+ACT.pron=()=>{
+  ses=null;cur=null;pr=null;
+  h(`<h2>發音基礎</h2><p class="sub">三個最容易聽錯、說錯的地方。每個單元先看說明、聽例子，再做 ${PRON_N} 題聽辨。</p>
+  ${PRON.map(t=>{const q=S.pron[t.id];return `<div class="card"><div class="row" style="justify-content:space-between"><b>${t.name}</b><span class="note">${q&&q.n?`做過 ${q.n} 題，正確率 ${Math.round(100*q.ok/q.n)}%`:"還沒練"}</span></div><div class="stack"><button data-act="ptopic" data-id="${t.id}">進入</button></div></div>`;}).join("")}
+  <div class="stack">${S.started?`<button class="primary" data-act="go">開始學句子</button>`:`<button class="primary" data-act="pick">選場景，開始學句子</button>`}<button class="link" data-act="home">回首頁</button></div>`);
+};
+ACT.ptopic=d=>{
+  const t=PRX[d.id];pr={t,i:0,ok:0,cur:null};
+  h(`<div class="top"><span>發音基礎 · ${t.name}</span><button class="link" data-act="pron">返回</button></div>
+  <div class="card"><h3>怎麼發音</h3><div>${t.how}</div></div>
+  <div class="card"><h3>點一下聽，左右比較</h3>${t.pairs.map(p=>`<div class="duo" style="margin:8px 0">${wordBtn(p[0],p[1],"pplay",`data-w="${p[0]}"`)}${wordBtn(p[2],p[3],"pplay",`data-w="${p[2]}"`)}</div>`).join("")}</div>
+  <div class="stack"><button class="primary" data-act="pstart">開始聽辨練習（${PRON_N} 題）</button></div>`);
+};
+ACT.pplay=d=>speak(d.w,0.9);
+function ptrial(){
+  const p=pr.t.pairs[ri(0,pr.t.pairs.length-1)],ans=ri(0,1);
+  pr.cur={p,ans,pick:null};renderTrial();speak(p[ans*2],0.9);
+}
+function renderTrial(){
+  const c=pr.cur,p=c.p,cls=i=>c.pick==null?"":(i===c.ans?"right":i===c.pick?"hit":"");
+  h(`<div class="top"><span>${pr.t.name} · 第 ${pr.i+1}/${PRON_N} 題</span><button class="link" data-act="pron">結束</button></div>
+  <div class="card pick"><h3>聽到的是哪一個？</h3><div class="ctx" style="margin:0 0 10px"><button data-act="pagain">▶ 再聽一次</button></div>
+  <div class="duo">${[0,1].map(i=>wordBtn(p[i*2],p[i*2+1],c.pick==null?"pans":"pplay",`data-i="${i}" data-w="${p[i*2]}" class="${cls(i)}"`)).join("")}</div></div>
+  ${c.pick==null?"":(c.pick===c.ans?good("答對了！"):bad("這題是「"+p[c.ans*2]+"」。"))+`<div class="note">兩個都可以再點來聽，比較差別。</div><div class="stack"><button class="primary" data-act="pnext">${pr.i+1<PRON_N?"下一題":"看結果"}</button></div>`}`);
+}
+ACT.pagain=()=>speak(pr.cur.p[pr.cur.ans*2],0.9);
+ACT.pans=d=>{const c=pr.cur;if(c.pick!=null)return;c.pick=+d.i;if(c.pick===c.ans) pr.ok++;renderTrial();};
+ACT.pstart=()=>{pr.i=0;pr.ok=0;ptrial();};
+ACT.pnext=()=>{
+  pr.i++;
+  if(pr.i<PRON_N) return ptrial();
+  const q=S.pron[pr.t.id]||(S.pron[pr.t.id]={n:0,ok:0,runs:[]});q.n+=PRON_N;q.ok+=pr.ok;q.runs.push({at:Date.now(),ok:pr.ok,n:PRON_N});if(q.runs.length>20)q.runs.shift();save();
+  h(`<h2>${pr.t.name}：${PRON_N} 題答對 ${pr.ok} 題</h2><p class="sub">${pr.ok>=PRON_N-1?"這個對比你聽得出來了。":"還分不太出來的話，回說明頁把例子左右多聽幾次再練。"}</p>
+  <div class="stack"><button data-act="ptopic" data-id="${pr.t.id}">回說明，再練一次</button><button class="primary" data-act="pron">其他發音單元</button></div>`);
+};
+
+/* ----- 我的資料 ----- */
+function meter(v){return `<span class="meter"><i style="width:${Math.round(v*100)}%"></i></span>`;}
+function dash(){
+  const ms=Object.keys(METHODS).map(k=>({k,...S.method[k],mean:S.method[k].a/(S.method[k].a+S.method[k].b)})).sort((x,y)=>y.mean-x.mean);
+  const ids=LEAVES.map(L=>L.id).filter(id=>S.picked.includes(id)||(S.leaf[id]&&(S.leaf[id].n>0||S.leaf[id].swaps>0||S.leaf[id].blocked)));
+  const ls=ids.map(id=>{const q=lst(id),all=PH.filter(p=>p.leaf===id);return {id,...q,mean:q.a/(q.a+q.b),total:all.length,taught:all.filter(p=>S.ph[p.id]&&S.ph[p.id].st>0).length,kept:all.filter(p=>S.ph[p.id]&&S.ph[p.id].st>=3).length};}).sort((x,y)=>(x.blocked-y.blocked)||(y.mean-x.mean));
+  const taught=Object.keys(S.ph).filter(id=>S.ph[id].st>0).length,kept=Object.keys(S.ph).filter(id=>S.ph[id].st>=3).length;
+  const last=S.attn.slice(-5).reverse();
+  h(`<h2>我的資料</h2><p class="sub">教過 ${taught} 句 · 連續答對 2 次以上 ${kept} 句 · 句庫共 ${PH.length} 句${S.trip?" · 出發日 "+S.trip:""}</p>
+  <div class="card"><h3>教法效果（用之後的複習結果算）</h3><table><tr><th>教法</th><th class="n">計分次數</th><th class="n">估計</th></tr>
+  ${ms.map(m=>`<tr><td>${METHODS[m.k].name}</td><td class="n">${m.n}</td><td class="n">${m.mean.toFixed(2)}${meter(m.mean)}</td></tr>`).join("")}</table></div>
+  <div class="card"><h3>場景</h3>${ls.length?`<table><tr><th>場景</th><th class="n">教過</th><th class="n">記住</th><th class="n">👍</th><th class="n">🔄</th><th class="n">喜好</th></tr>
+  ${ls.map(l=>`<tr><td>${pathOf(l.id)}${l.blocked?" 🚫":S.picked.includes(l.id)?"":"（探索）"}</td><td class="n">${l.taught}/${l.total}</td><td class="n">${l.kept}</td><td class="n">${l.likes}</td><td class="n">${l.swaps}</td><td class="n">${l.blocked?"—":l.mean.toFixed(2)+meter(l.mean)}</td></tr>`).join("")}</table>`:`<div class="note">還沒有資料</div>`}</div>
+  <div class="card"><h3>專注長度</h3><div>目前估計：約 ${S.attnEst} 分鐘（到這個時間會問要不要休息）</div>
+  ${last.length?`<table><tr><th>最近幾次</th><th class="n">分鐘</th><th class="n">題數</th><th class="n">變慢的時間點</th></tr>${last.map(a=>`<tr><td>${new Date(a.at).toLocaleDateString()}</td><td class="n">${a.min}</td><td class="n">${a.items}</td><td class="n">${a.drift==null?"—":a.drift+" 分"}</td></tr>`).join("")}</table>`:""}</div>
+  <div class="card"><h3>開口與發音</h3><div>開口說（自己判定）：${S.sp.n} 次，其中 ${S.sp.ok} 次說對</div>
+  <table><tr><th>發音聽辨</th><th class="n">做過</th><th class="n">正確率</th></tr>${PRON.map(t=>{const q=S.pron[t.id];return `<tr><td>${t.name}</td><td class="n">${q?q.n:0}</td><td class="n">${q&&q.n?Math.round(100*q.ok/q.n)+"%":"—"}</td></tr>`;}).join("")}</table></div>
+  <p class="note">計分次數少於 5 的估計值還不可靠，只代表目前的猜測。</p>
+  <div class="stack"><button class="primary" data-act="${S.started?"go":"pick"}">${S.started?"繼續學習":"開始"}</button><button data-act="pron">發音基礎</button><button data-act="export">匯出 JSON</button><button data-act="pick">重新選場景</button><button class="link" data-act="home">回首頁</button></div>
+  <div id="exp" hidden><textarea id="expt" readonly></textarea><button data-act="copy">複製</button></div>`);
+}
+ACT.export=async()=>{
+  const txt=JSON.stringify({when:new Date().toISOString(),tts:jaVoice?jaVoice.name:null,sr:!!SR,...S},null,1),name="jp_"+new Date().toISOString().replace(/[:.]/g,"-")+".json";
+  document.getElementById("expt").value=txt;document.getElementById("exp").hidden=false;
+  const f=new File([txt],name,{type:"application/json"});
+  try{if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});return;}}catch(e){if(e&&e.name==="AbortError")return;}
+  const a=document.createElement("a");a.href=URL.createObjectURL(f);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),3000);
+};
+ACT.copy=async()=>{const t=document.getElementById("expt");t.select();try{await navigator.clipboard.writeText(t.value);}catch(e){try{document.execCommand("copy");}catch(_){}}};
+
+home();
+if(hasTTS) setTimeout(()=>{if(!ses&&!cur&&app.querySelector("[data-act=test]")){loadVoices();home();}},800);
+</script>
+</body>
+</html>
