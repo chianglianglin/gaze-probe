@@ -140,12 +140,12 @@ function align(L,phones){
   if(K&&toks[K-1].opt){ends.push(NS-3);if(K>1) ends.push(NS-4);}
   let s=-1,best=NEG;
   for(const e of ends) if(e>=0&&D[F-1][e]>best){best=D[F-1][e];s=e;}
-  const on=new Array(K).fill(-1);
+  const on=new Array(K).fill(-1),gop=new Array(K).fill(null);
   if(s>=0) for(let t=F-1;t>=0;t--){
-    if(s%2===1) on[(s-1)/2]=t;
+    if(s%2===1){const j=(s-1)/2;on[j]=t;if(gop[j]==null||E[j][t]>gop[j]) gop[j]=E[j][t];}   // gop：這個音在它那幾格裡最高的 log 機率
     const p=B[t][s];if(p<0)break;s=p;
   }
-  return {logp:best,F,toks,on};
+  return {logp:best,F,toks,on,gop};
 }
 
 /* ---------- 長度：以「拍」為單位切段，和示範比 ---------- */
@@ -172,7 +172,7 @@ function compareLength(alL,alR){
   for(const x of a.iv){
     const y=m.get(x.a+"-"+x.b);if(!y||y.d<=0)continue;
     const rl=a.span-x.d,rr=b.span-y.d,norm=rl>=MIN_REST&&rr>=MIN_REST;
-    out.push({a:x.a,b:x.b,seg:x.seg,feat:x.feat,dL:x.d,dR:y.d,norm,ratio:norm?(x.d/rl)/(y.d/rr):x.d/y.d});
+    out.push({a:x.a,b:x.b,seg:x.seg,feat:x.feat,dL:x.d,dR:y.d,norm,abs:x.d/y.d,ratio:norm?(x.d/rl)/(y.d/rr):x.d/y.d});
   }
   return out;
 }
@@ -191,21 +191,30 @@ function voicing(L,phones,base){
   return out;
 }
 
-/* ---------- 一段錄音的完整分析 ---------- */
+/* ---------- 一段錄音的完整分析 ----------
+   1. 先看每個音有沒有唸出來（該音在對齊位置上的最高機率）。沒唸出來的音太多時，長度和清濁的數字沒有意義，只回報哪些音沒跟上。
+   2. 長音／促音：實際長度（abs）和校正語速後的長度（ratio）都低於門檻才算太短。
+      只看校正後的值，遇到唸得慢又不均勻的初學者會誤判；只看實際長度，遇到語速不同的人會誤判。
+   3. 清濁音：目標音的機率輸給對應的清／濁音才提示。 */
+const WEAK_P=0.1;        // 最高機率低於這個值，視為「這個音沒有清楚唸出來」（暫定值，要用真人資料校正）
+const ABS_TH=0.9,NORM_TH=0.9;
 function analyse(L,kana,R){
   const tg=kanaToPhones(kana),al=align(L,tg),fb=[];
-  const voice=voicing(L,tg,al);
-  for(const v of voice) if(v.margin<0) fb.push({cat:"voice",msg:VOICELESS.has(v.p)?`${KANA_ROW[v.p]||v.p}的音聽起來偏濁，像${KANA_ROW[v.alt]||v.alt}`:`${KANA_ROW[v.p]||v.p}的音聽起來偏清，像${KANA_ROW[v.alt]||v.alt}`,margin:+v.margin.toFixed(2)});
-  let length=[];
-  if(R){
-    length=compareLength(al,align(R,tg));
+  const phones=al.toks.map((t,k)=>({p:t.p+(t.long?t.p:""),q:t.q,opt:t.opt,on:al.on[k],post:al.gop[k]==null?0:+Math.exp(al.gop[k]).toFixed(3)}));
+  const need=phones.filter(x=>!x.opt),weak=need.filter(x=>x.on<0||x.post<WEAK_P);
+  const complete=weak.length<Math.max(2,Math.ceil(need.length*0.3));
+  if(weak.length) fb.push({cat:"missing",msg:(complete?"這個音不太清楚：":"有幾個音沒有跟上，先把這一段再聽一次：")+weak.map(x=>x.p).join("、")});
+  const voice=voicing(L,tg,al),length=R?compareLength(al,align(R,tg)):[];
+  if(complete){
+    for(const v of voice) if(v.margin<0) fb.push({cat:"voice",msg:VOICELESS.has(v.p)?`${KANA_ROW[v.p]||v.p}的音聽起來偏濁，像${KANA_ROW[v.alt]||v.alt}`:`${KANA_ROW[v.p]||v.p}的音聽起來偏清，像${KANA_ROW[v.alt]||v.alt}`,margin:+v.margin.toFixed(2)});
     for(const g of length){
-      const pct=Math.round(g.ratio*100)+"%";
-      if(g.feat&&g.ratio<SHORT_TH) fb.push({cat:"short",msg:`「${g.seg}」的${g.feat}太短（長度是示範的 ${pct}${g.norm?"":"，句子太短沒有校正語速"}）`});
-      else if(!g.feat&&g.norm&&g.ratio>LONG_HINT) fb.push({cat:"long",msg:`「${g.seg}」這一拍比示範長很多（${pct}），可能聽起來像長音或促音`});
+      if(!g.feat)continue;
+      const short=g.norm?(g.abs<ABS_TH&&g.ratio<NORM_TH):g.abs<SHORT_TH;
+      if(short) fb.push({cat:"short",msg:`「${g.seg}」的${g.feat}太短（實際長度是示範的 ${Math.round(g.abs*100)}%${g.norm?`，校正語速後 ${Math.round(g.ratio*100)}%`:""}）`});
     }
   }
-  return {target:tg.map(t=>t.opt?"("+t.p+")":t.p).join(" "),greedy:greedy(L).join(" "),logpPerFrame:+(al.logp/L.F).toFixed(3),on:al.on,voice:voice.map(v=>({p:v.p,alt:v.alt,margin:+v.margin.toFixed(2)})),length:length.map(g=>({...g,ratio:+g.ratio.toFixed(2)})),fb};
+  return {target:tg.map(t=>t.opt?"("+t.p+")":t.p).join(" "),greedy:greedy(L).join(" "),logpPerFrame:+(al.logp/L.F).toFixed(3),complete,phones,
+    voice:voice.map(v=>({p:v.p,alt:v.alt,margin:+v.margin.toFixed(2)})),length:length.map(g=>({...g,abs:+g.abs.toFixed(2),ratio:+g.ratio.toFixed(2)})),fb};
 }
 
 function resample(pcm,f){   // f>1 變慢且音調變低，f<1 變快且音調變高（拿來模擬不同語速的人）
@@ -267,5 +276,5 @@ async function selfTest(clips,lsOf,onStep){
   return rep;
 }
 
-window.SP={kanaToPhones,normToken,init,setOf,logSoftmax,greedy,collapse,align,moras,compareLength,voicing,analyse,resample,selfTest,SHORT_TH,LONG_TH,LONG_HINT};
+window.SP={kanaToPhones,normToken,init,setOf,logSoftmax,greedy,collapse,align,moras,compareLength,voicing,analyse,resample,selfTest,SHORT_TH,LONG_TH,LONG_HINT,WEAK_P,ABS_TH,NORM_TH};
 })();
