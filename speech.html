@@ -53,10 +53,17 @@ textarea{width:100%;height:160px;font:12px/1.4 ui-monospace,Menlo,Consolas,monos
   <h2>2. 自己唸一次</h2>
   <div class="row">
     <select id="target"></select>
-    <button id="btnPlay" disabled>▶ 聽示範</button>
-    <button id="btnRec" disabled>● 開始錄音</button>
   </div>
-  <div id="recMsg" class="note">載入模型後可以錄音。按一下開始，唸完再按一下停止。短單字量不準長度，建議用句子測。</div>
+  <div class="row">
+    <button id="btnPlay" disabled>▶ 聽示範</button>
+    <button id="btnRec" disabled>● 錄音：跟著示範唸</button>
+  </div>
+  <div class="row">
+    <button id="btnPlayBad" disabled>▶ 聽唸錯的版本</button>
+    <button id="btnRecBad" disabled>● 錄音：跟著唸錯的版本唸</button>
+  </div>
+  <div id="badNote" class="note"></div>
+  <div id="recMsg" class="note">不用會日語：先按 ▶ 聽，再按 ● 錄音，照聽到的聲音跟著唸，唸完再按一次停止。兩種版本各錄一次，看系統分不分得出來。</div>
   <div id="recOut"></div>
 </div>
 
@@ -108,7 +115,7 @@ async function loadModel(){
     SP.init(vocab);
     REPORT.backend=device;REPORT.dtype=dtype;REPORT.loadSec=+((performance.now()-t0)/1000).toFixed(1);
     say(`模型已載入（${device} / ${dtype}，${REPORT.loadSec} 秒）`);
-    $("btnTest").disabled=false;$("btnRec").disabled=false;showReport();
+    $("btnTest").disabled=false;$("btnRec").disabled=false;$("btnRecBad").disabled=false;showReport();
     return true;
   }catch(e){
     console.error(e);say("載入失敗："+(e&&e.message||e));REPORT.loadError=String(e&&e.message||e);showReport();
@@ -139,10 +146,14 @@ function playPcm(f){
 
 /* ========== 錄音 ========== */
 const TARGETS=[];
-for(const c of CLIPS) if(c.type==="sent"&&c.side===0) TARGETS.push({label:c.kana.replace(/ /g,""),kana:c.kana,clip:c});
-for(const c of CLIPS) if(c.type==="word") TARGETS.push({label:c.kana+"（"+c.zh+"）",kana:c.kana,clip:c});
+const partner=c=>CLIPS.find(x=>x.pair===c.pair&&x.side!==c.side);   // 同一組裡只差一個音的另一段，當作「唸錯的版本」
+for(const c of CLIPS) if(c.type==="sent"&&c.side===0) TARGETS.push({label:c.kana.replace(/ /g,""),kana:c.kana,clip:c,bad:partner(c),note:partner(c).note});
+for(const c of CLIPS) if(c.type==="word"){const b=partner(c);TARGETS.push({label:c.kana+"（"+c.zh+"）",kana:c.kana,clip:c,bad:b,note:c.kana+"→"+b.kana});}
 $("target").innerHTML=TARGETS.map((t,i)=>`<option value="${i}">${t.label}</option>`).join("");
-let rec=null,chunks=[],recStream=null;
+const curTarget=()=>TARGETS[+$("target").value];
+function showBadNote(){const t=curTarget();$("badNote").textContent=t?"唸錯的版本改了這裡："+t.note:"";}
+$("target").addEventListener("change",showBadNote);showBadNote();
+let rec=null,chunks=[],recStream=null,recMode="correct";
 async function blobToPcm16k(blob){
   const ac=new (window.AudioContext||window.webkitAudioContext)();
   const ab=await ac.decodeAudioData(await blob.arrayBuffer());ac.close();
@@ -150,30 +161,33 @@ async function blobToPcm16k(blob){
   const src=off.createBufferSource();src.buffer=ab;src.connect(off.destination);src.start();
   return (await off.startRendering()).getChannelData(0);
 }
-async function toggleRec(){
+const REC_LABEL={correct:"● 錄音：跟著示範唸",wrong:"● 錄音：跟著唸錯的版本唸"};
+async function toggleRec(mode){
   if(rec&&rec.state==="recording"){rec.stop();return;}
   try{recStream=await navigator.mediaDevices.getUserMedia({audio:true});}
   catch(e){$("recMsg").textContent="拿不到麥克風："+(e.message||e);return;}
+  recMode=mode;const btn=mode==="wrong"?$("btnRecBad"):$("btnRec"),other=mode==="wrong"?$("btnRec"):$("btnRecBad");
   chunks=[];rec=new MediaRecorder(recStream);
   rec.ondataavailable=e=>chunks.push(e.data);
   rec.onstop=async()=>{
-    recStream.getTracks().forEach(t=>t.stop());$("btnRec").textContent="● 開始錄音";$("recMsg").textContent="分析中…";
-    try{await analyse(await blobToPcm16k(new Blob(chunks,{type:rec.mimeType})),TARGETS[+$("target").value]);}
+    recStream.getTracks().forEach(t=>t.stop());btn.textContent=REC_LABEL[mode];other.disabled=false;$("recMsg").textContent="分析中…";
+    try{await analyse(await blobToPcm16k(new Blob(chunks,{type:rec.mimeType})),curTarget(),mode);}
     catch(e){console.error(e);$("recMsg").textContent="處理失敗："+(e.message||e);}
   };
-  rec.start();$("btnRec").textContent="■ 停止";$("recMsg").textContent="錄音中…唸完按停止。";
+  rec.start();btn.textContent="■ 停止";other.disabled=true;$("recMsg").textContent="錄音中…唸完按停止。";
 }
-async function analyse(pcm,t){
+async function analyse(pcm,t,mode){
   const t1=performance.now(),L=await lsOfPcm(pcm),R=await lsOfClip(t.clip,1),res=SP.analyse(L,t.kana,R),sec=(performance.now()-t1)/1000;
   $("recMsg").textContent=`完成（語音 ${(pcm.length/16000).toFixed(1)} 秒，運算 ${sec.toFixed(1)} 秒）`;
   const pct=x=>Math.round(x*100)+"%";
-  $("recOut").innerHTML=`<h3>回饋</h3>${res.fb.length?res.fb.map(f=>`<div class="fb bad">${f.msg}</div>`).join(""):`<div class="fb ok">長度和清濁音都沒有發現問題</div>`}
+  const expect=mode==="wrong"?`這次是跟著「唸錯的版本」唸（${t.note}），系統應該要在下面指出問題。`:mode==="correct"?"這次是跟著示範唸，理想情況下不該有紅字。":"";
+  $("recOut").innerHTML=`<div class="note" style="margin-top:10px">${expect}</div><h3>回饋</h3>${res.fb.length?res.fb.map(f=>`<div class="fb bad">${f.msg}</div>`).join(""):`<div class="fb ok">長度和清濁音都沒有發現問題</div>`}
   <h3>每一拍的長度（一格 20 毫秒）</h3><div class="scroll"><table><tr><th>拍</th><th>你</th><th>示範</th><th>相對長度</th><th></th></tr>
   ${res.length.map(g=>`<tr><td class="mono">${g.seg}</td><td class="n">${g.dL}</td><td class="n">${g.dR}</td><td class="n ${g.feat&&g.ratio<SP.SHORT_TH?"bad":""}">${pct(g.ratio)}</td><td>${g.feat||""}${g.norm?"":"　未校正語速"}</td></tr>`).join("")||`<tr><td colspan="5">對不上，無法比較</td></tr>`}</table></div>
   <h3>清濁音（數字越大越確定是目標的音，負的表示聽起來像另一個）</h3><div class="scroll"><table><tr><th>目標</th><th>對照</th><th>差距</th></tr>
   ${res.voice.map(v=>`<tr><td class="mono">${v.p}</td><td class="mono">${v.alt}</td><td class="n ${v.margin<0?"bad":""}">${v.margin}</td></tr>`).join("")||`<tr><td colspan="3">這句沒有清濁成對的音</td></tr>`}</table></div>
   <h3>參考</h3><div class="note mono">目標音素：${res.target}<br>模型自己輸出：${res.greedy}<br>對齊品質（每格平均 log 機率，越接近 0 越好）：${res.logpPerFrame}</div>`;
-  REPORT.recordings.push({target:t.kana,audioSec:+(pcm.length/16000).toFixed(1),sec:+sec.toFixed(1),...res});
+  REPORT.recordings.push({target:t.kana,imitated:mode||null,changed:mode==="wrong"?t.note:null,audioSec:+(pcm.length/16000).toFixed(1),sec:+sec.toFixed(1),...res});
   showReport();
 }
 
@@ -201,10 +215,12 @@ async function selfTest(){
 
 $("btnLoad").addEventListener("click",loadModel);
 $("btnTest").addEventListener("click",selfTest);
-$("btnRec").addEventListener("click",toggleRec);
-$("btnPlay").addEventListener("click",()=>playPcm(clipPcm(TARGETS[+$("target").value].clip)));
+$("btnRec").addEventListener("click",()=>toggleRec("correct"));
+$("btnRecBad").addEventListener("click",()=>toggleRec("wrong"));
+$("btnPlay").addEventListener("click",()=>playPcm(clipPcm(curTarget().clip)));
+$("btnPlayBad").addEventListener("click",()=>playPcm(clipPcm(curTarget().bad)));
 $("btnCopy").addEventListener("click",async()=>{const t=$("out");t.select();try{await navigator.clipboard.writeText(t.value);$("copyMsg").textContent="已複製";}catch(e){try{document.execCommand("copy");$("copyMsg").textContent="已複製";}catch(_){$("copyMsg").textContent="複製失敗，請手動全選複製";}}});
-$("btnPlay").disabled=!CLIPS.length;showReport();
+$("btnPlay").disabled=!CLIPS.length;$("btnPlayBad").disabled=!CLIPS.length;showReport();
 if(!CLIPS.length) $("testMsg").textContent="找不到 speech_clips.js（要和這個檔案放在同一個資料夾）";
 if(location.hash.startsWith("#selftest")){
   if(location.hash.includes("webgpu")) $("backend").value="webgpu";
