@@ -47,7 +47,7 @@ textarea{width:100%;height:160px;font:12px/1.4 ui-monospace,Menlo,Consolas,monos
     <button class="primary" id="btnLoad">載入模型</button>
   </div>
   <progress id="bar" max="100" value="0" hidden style="width:100%;height:14px"></progress>
-  <div id="loadMsg" class="note">還沒載入。第一次要下載模型，之後瀏覽器會快取。</div>
+  <div id="loadMsg" class="warn" style="font-size:16px">頁面資料下載中，請稍候…網路慢的時候要等十幾秒，下面的選單出現選項後就會自動開始載入模型。</div>
 </div>
 
 <div class="card">
@@ -71,7 +71,7 @@ textarea{width:100%;height:160px;font:12px/1.4 ui-monospace,Menlo,Consolas,monos
 <div class="card">
   <h2>3. 自我測試（合成語音，不用麥克風）</h2>
   <div class="note">用合成語音當成學習者來測。測試期間請讓這個分頁留在前景。</div>
-  <div class="row"><button id="btnChunkTest" disabled>小段自我測試（約 2 分鐘）</button><button id="btnTest" disabled>舊的整句自我測試（約 3 分鐘）</button><span id="testMsg" class="note"></span></div>
+  <div class="row"><button id="btnChunkTest" disabled>小段自我測試（約 1 分鐘）</button><span id="testMsg" class="note"></span></div>
   <div id="summary"></div>
 </div>
 
@@ -83,16 +83,14 @@ textarea{width:100%;height:160px;font:12px/1.4 ui-monospace,Menlo,Consolas,monos
 </main>
 
 <!-- 檔名後面的 ?v= 每次改版都要換，瀏覽器才不會用到舊的快取 -->
-<script src="speech_clips.js?v=1"></script>
-<script src="speech_chunks.js?v=7"></script>
-<script src="speech_core.js?v=7"></script>
+<script src="speech_chunks.js?v=8"></script>
+<script src="speech_core.js?v=8"></script>
 <script>
 "use strict";
 const TF_URL="https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.min.js";
 const MODEL_ID="qnighy/wav2vec2-xlsr-53-espeak-cv-ft-ONNX";
 const $=id=>document.getElementById(id);
-const CLIPS=window.CLIPS||[];
-const REPORT={page:"speech.html v7",model:MODEL_ID,ua:navigator.userAgent,backend:null,dtype:null,loadSec:null,recordings:[],chunktest:null,selftest:null};
+const REPORT={page:"speech.html v8",model:MODEL_ID,ua:navigator.userAgent,backend:null,dtype:null,loadSec:null,recordings:[],chunktest:null};
 function showReport(){$("out").value=JSON.stringify(REPORT,null,1);}
 const tick=()=>new Promise(r=>{const c=new MessageChannel();c.port1.onmessage=()=>r();c.port2.postMessage(0);});
 
@@ -133,7 +131,7 @@ async function loadModel(){
     REPORT.backend=device;REPORT.dtype=dtype;REPORT.loadSec=+((performance.now()-t0)/1000).toFixed(1);
     $("loadMsg").innerHTML=`<span class="ok" style="font-size:17px;font-weight:600">✓ 模型已載入，可以到下面錄音了</span>　（${device} / ${dtype}，${REPORT.loadSec} 秒）`;
     $("btnLoad").textContent="已載入 ✓";
-    modelReady=true;$("btnTest").disabled=false;$("btnChunkTest").disabled=false;$("btnRec").disabled=false;showBadNote();showReport();
+    modelReady=true;$("btnChunkTest").disabled=false;$("btnRec").disabled=false;showBadNote();showReport();
     return true;
   }catch(e){
     clearInterval(timer);bar.hidden=true;
@@ -243,30 +241,7 @@ async function chunkTest(){
   $("testMsg").textContent="完成";$("btnChunkTest").disabled=false;showReport();
 }
 
-/* ========== 自我測試 ========== */
-async function selfTest(){
-  $("btnTest").disabled=true;$("summary").innerHTML="";
-  const t0=performance.now();
-  const rep=await SP.selfTest(CLIPS,lsOfClip,async(i,n)=>{$("testMsg").textContent=`第 ${i} / ${n} 段…`;await tick();});
-  const total=(performance.now()-t0)/1000;
-  rep.totalSec=+total.toFixed(1);REPORT.selftest=rep;
-  const v=rep.voice,l=rep.length,s=rep.speed;
-  $("summary").innerHTML=`<div class="scroll"><table style="margin:8px 0"><tr><th>項目</th><th>結果</th></tr>
-  <tr><td>清濁音：兩個候選裡選對</td><td>${v.ok} / ${v.n}</td></tr>
-  <tr><td>清濁音：唸對卻被標成有問題</td><td>${v.selfFlag} / ${v.selfN}</td></tr>
-  <tr><td>長音／促音：唸短，抓到「太短」</td><td>${l.shortHit} / ${l.n}</td></tr>
-  <tr><td>長音／促音：唸長，抓到「太長」</td><td>${l.longHit} / ${l.n}</td></tr>
-  <tr><td>　其中有校正語速的組數</td><td>${l.norm} / ${l.n}</td></tr>
-  <tr><td>換語速後：唸短，抓到「太短」</td><td>${s.shortHit} / ${s.n}</td></tr>
-  <tr><td>換語速後：唸對卻被標「太短」</td><td>${s.okShortFalse} / ${s.n}</td></tr>
-  <tr><td>換語速後：唸長，抓到「太長」</td><td>${s.longHit} / ${s.n}</td></tr>
-  <tr><td>換語速後：唸對卻被標「太長」</td><td>${s.okLongFalse} / ${s.n}</td></tr></table></div>
-  <div class="note">共 ${total.toFixed(0)} 秒。這些是合成語音的結果，真人的聲音要另外測。</div>`;
-  $("testMsg").textContent="完成";$("btnTest").disabled=false;showReport();
-}
-
 $("btnLoad").addEventListener("click",loadModel);
-$("btnTest").addEventListener("click",selfTest);
 $("btnChunkTest").addEventListener("click",chunkTest);
 $("btnRec").addEventListener("click",()=>toggleRec("correct"));
 $("btnRecBad").addEventListener("click",()=>toggleRec("wrong"));
@@ -274,11 +249,11 @@ $("btnPlay").addEventListener("click",()=>playPcm(clipPcm(curTarget().clip)));
 $("btnPlayBad").addEventListener("click",()=>{const t=curTarget();if(t.bad) playPcm(clipPcm(t.bad));});
 $("btnCopy").addEventListener("click",async()=>{const t=$("out");t.select();try{await navigator.clipboard.writeText(t.value);$("copyMsg").textContent="已複製";}catch(e){try{document.execCommand("copy");$("copyMsg").textContent="已複製";}catch(_){$("copyMsg").textContent="複製失敗，請手動全選複製";}}});
 $("btnPlay").disabled=!TARGETS.length;showBadNote();showReport();
-if(!CLIPS.length) $("testMsg").textContent="找不到 speech_clips.js（要和這個檔案放在同一個資料夾）";
+if(!TARGETS.length){$("loadMsg").className="bad";$("loadMsg").textContent="找不到 speech_chunks.js（要和這個檔案放在同一個資料夾），請重新整理。";}
 // 開頁面就自動載入模型（不用再按按鈕）；網址加 #selftest 會接著跑自我測試
 if(TARGETS.length&&window.SP){
   if(location.hash.includes("webgpu")) $("backend").value="webgpu";
-  loadModel().then(ok=>{if(!ok)return;if(location.hash.startsWith("#selftest")) selfTest();else if(location.hash.startsWith("#chunktest")) chunkTest();});
+  loadModel().then(ok=>{if(ok&&location.hash.startsWith("#chunktest")) chunkTest();});
 }
 </script>
 </body>

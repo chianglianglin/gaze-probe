@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Speak Probe · 旅遊日語發音課</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1d1d1f;--mut:#6b6b70;--line:#e2e0d8;--acc:#2f6fed;--ok:#1a8f4c;--bad:#c8402f;--warn:#b7791f;--chip:#eef2fb;--demo:#b9b7ae}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1f1f23;--ink:#eeeef0;--mut:#9a9aa2;--line:#33333a;--acc:#6f9dff;--ok:#4cc47f;--bad:#f07a68;--warn:#e0a94a;--chip:#262b3a;--demo:#5a5a63}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei","Hiragino Sans","Yu Gothic",sans-serif}
+#app{max-width:640px;margin:0 auto;padding:12px 16px 80px}
+h1{font-size:24px;margin:16px 0 4px}
+h2{font-size:19px;margin:14px 0 4px}
+h3{font-size:14px;margin:0 0 8px;color:var(--mut);font-weight:600}
+.sub,.note{color:var(--mut);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:12px 0}
+button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 14px}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button.rec{background:var(--bad);border-color:var(--bad);color:#fff;font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+button.link{border:0;background:none;color:var(--mut);padding:6px 8px;font-size:14px}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--mut);min-height:36px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.list>button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;margin:8px 0}
+.list small{color:var(--mut);white-space:nowrap}
+.jp{font-size:24px;font-weight:600;line-height:1.5}
+.kana{color:var(--mut);font-size:15px}
+.roma{color:var(--acc);font-size:15px;font-style:italic}
+.zh{font-size:17px;margin-top:4px}
+.tip{font-size:13px;color:var(--warn);margin-top:4px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chips button{padding:6px 10px;border-radius:999px;font-size:13px}
+.chips button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.chips button.done{border-color:var(--ok)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.fb{font-size:16px;margin:6px 0}
+.verdict{font-size:22px;font-weight:700;margin-bottom:6px}
+.post{display:flex;flex-wrap:wrap;gap:6px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.post span{border:1px solid var(--line);border-radius:8px;padding:3px 7px;text-align:center}
+.post span.bad{border-color:var(--bad)}
+.bars{margin:10px 0}
+.beat{display:grid;grid-template-columns:86px 1fr;gap:8px;align-items:center;margin:8px 0;font-size:13px}
+.beat .lab{font-family:ui-monospace,Menlo,Consolas,monospace}
+.beat .lab em{font-style:normal;color:var(--warn);font-family:inherit;display:block;font-size:12px}
+.bar{height:10px;border-radius:5px;background:var(--demo);margin:3px 0;min-width:2px}
+.bar.me{background:var(--acc)}.bar.me.bad{background:var(--bad)}.bar.me.warn{background:var(--warn)}
+.legend{font-size:12px;color:var(--mut);display:flex;gap:14px;align-items:center}
+.legend i{display:inline-block;width:18px;height:8px;border-radius:4px;background:var(--demo);margin-right:4px;vertical-align:middle}
+.legend i.me{background:var(--acc)}
+progress{width:100%;height:12px}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+.duo button{text-align:center}
+.duo .w{font-size:20px;font-weight:600}
+.duo button.right{border-color:var(--ok);color:var(--ok)}.duo button.hit{border-color:var(--bad);color:var(--bad)}
+textarea{width:100%;height:140px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px}
+audio{width:100%;height:36px;margin-top:6px}
+</style>
+</head>
+<body>
+<div id="app"><p class="warn" style="font-size:17px;margin-top:40px">頁面資料下載中，請稍候…</p></div>
+<!-- 檔名後面的 ?v= 每次改版都要換，瀏覽器才不會用到舊的快取 -->
+<script src="speak_data.js?v=1"></script>
+<script src="speech_core.js?v=9"></script>
+<script>
+"use strict";
+const TF_URL="https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.min.js";
+const MODEL_ID="qnighy/wav2vec2-xlsr-53-espeak-cv-ft-ONNX";
+const KEY="speakprobe_v1",DAY=864e5;
+const D=window.SPEAK||{lessons:[],phrases:[],leaves:[],places:[],cats:[],sec:{}};
+const app=document.getElementById("app"),ACT={};
+function h(html){app.innerHTML=html;window.scrollTo(0,0);}
+app.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b||b.disabled)return;const f=ACT[b.dataset.act];if(f)f(b.dataset);});
+
+/* ========== 狀態（存在這台裝置的瀏覽器） ========== */
+function fresh(){return {v:1,att:{},pass:{},ph:{},lesson:{},log:[]};}
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));return s&&s.v===1?s:null;}catch(e){return null;}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+let S=load()||fresh();S.pass=S.pass||{};
+
+/* ========== 假名 → 羅馬拼音、發音提示 ========== */
+const R1={あ:"a",い:"i",う:"u",え:"e",お:"o",か:"ka",き:"ki",く:"ku",け:"ke",こ:"ko",さ:"sa",し:"shi",す:"su",せ:"se",そ:"so",た:"ta",ち:"chi",つ:"tsu",て:"te",と:"to",な:"na",に:"ni",ぬ:"nu",ね:"ne",の:"no",は:"ha",ひ:"hi",ふ:"fu",へ:"he",ほ:"ho",ま:"ma",み:"mi",む:"mu",め:"me",も:"mo",や:"ya",ゆ:"yu",よ:"yo",ら:"ra",り:"ri",る:"ru",れ:"re",ろ:"ro",わ:"wa",を:"o",ん:"n",が:"ga",ぎ:"gi",ぐ:"gu",げ:"ge",ご:"go",ざ:"za",じ:"ji",ず:"zu",ぜ:"ze",ぞ:"zo",だ:"da",ぢ:"ji",づ:"zu",で:"de",ど:"do",ば:"ba",び:"bi",ぶ:"bu",べ:"be",ぼ:"bo",ぱ:"pa",ぴ:"pi",ぷ:"pu",ぺ:"pe",ぽ:"po"};
+const R2={きゃ:"kya",きゅ:"kyu",きょ:"kyo",しゃ:"sha",しゅ:"shu",しょ:"sho",ちゃ:"cha",ちゅ:"chu",ちょ:"cho",ちぇ:"che",にゃ:"nya",にゅ:"nyu",にょ:"nyo",ひゃ:"hya",ひゅ:"hyu",ひょ:"hyo",みゃ:"mya",みゅ:"myu",みょ:"myo",りゃ:"rya",りゅ:"ryu",りょ:"ryo",ぎゃ:"gya",ぎゅ:"gyu",ぎょ:"gyo",じゃ:"ja",じゅ:"ju",じょ:"jo",びゃ:"bya",びゅ:"byu",びょ:"byo",ぴゃ:"pya",ぴゅ:"pyu",ぴょ:"pyo",ふぁ:"fa",ふぃ:"fi",ふぇ:"fe",ふぉ:"fo",てぃ:"ti",でぃ:"di",うぃ:"wi",うぇ:"we"};
+const k2h=s=>s.replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+function romaji(kana){
+  return k2h(kana).split(" ").map(w=>{
+    if(w==="は")return "wa";if(w==="へ")return "e";if(w==="を")return "o";
+    let o="",dbl=false;
+    for(let i=0;i<w.length;i++){
+      const two=w.substr(i,2);let r;
+      if(R2[two]){r=R2[two];i++;}
+      else if(w[i]==="っ"){dbl=true;continue;}
+      else if(w[i]==="ー"){o+=o.slice(-1);continue;}
+      else if(w[i]==="、"){o+=", ";continue;}
+      else r=R1[w[i]]||w[i];
+      if(dbl){r=(r[0]==="c"?"t":r[0])+r;dbl=false;}
+      o+=r;
+    }
+    return o;
+  }).join(" ");
+}
+const LONG_RE=/ー|[おこそとのほもよろごぞどぼぽょ]う|[うくすつぬふむゆるぐずづぶぷゅ]う|[おこそとのほもよろ]お|[あかさたなはまやらわがざだばぱゃ]あ|[いきしちにひみりぎじびぴ]い|[えけせてねへめれげぜでべぺ]え/;
+function tips(kana){
+  const out=[];
+  for(const w of k2h(kana).split(/[ 、]/)){
+    if(!w)continue;const t=[];
+    if(w.includes("っ")) t.push("小っ停一拍");
+    if(LONG_RE.test(w)) t.push("母音拉長一拍");
+    if(t.length) out.push(`${romaji(w)}（${t.join("、")}）`);
+  }
+  return out.length?`<div class="tip">注意：${out.join("　")}</div>`:"";
+}
+
+/* ========== 聲音：語音包、播放 ========== */
+let AC=null;
+function ac(){if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended") AC.resume();return AC;}
+const packLoading={},bufCache=new Map(),pcmCache=new Map();
+function loadPack(name){
+  if(window.AUDIO_PACK&&window.AUDIO_PACK[name]) return Promise.resolve();
+  return packLoading[name]||(packLoading[name]=new Promise((res,rej)=>{
+    const s=document.createElement("script");s.src="audio/"+name+".js?v=1";
+    s.onload=()=>res();s.onerror=()=>{delete packLoading[name];rej(new Error("語音包下載失敗（"+name+"），請檢查網路後再試"));};
+    document.head.appendChild(s);
+  }));
+}
+async function clipBuffer(id,pack){
+  if(bufCache.has(id)) return bufCache.get(id);
+  await loadPack(pack);
+  const b64=window.AUDIO_PACK[pack][id];if(!b64) throw new Error("找不到語音："+id);
+  const bin=atob(b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+  const buf=await ac().decodeAudioData(u.buffer);bufCache.set(id,buf);return buf;
+}
+async function to16k(buf){
+  const off=new OfflineAudioContext(1,Math.max(1,Math.ceil(buf.duration*16000)),16000);
+  const src=off.createBufferSource();src.buffer=buf;src.connect(off.destination);src.start();
+  return (await off.startRendering()).getChannelData(0);
+}
+let playing=null;
+function stopPlay(){if(playing){try{playing.stop();}catch(e){}playing=null;}}
+async function playClip(id,pack,rate){
+  try{
+    const buf=await clipBuffer(id,pack);stopPlay();
+    const s=ac().createBufferSource();s.buffer=buf;s.playbackRate.value=rate||1;s.connect(ac().destination);s.start();playing=s;
+  }catch(e){toast(e.message||String(e));}
+}
+function toast(m){const t=document.getElementById("toast");if(t){t.textContent=m;t.hidden=false;}}
+
+/* ========== 模型（背景載入；沒載好也可以先聽和錄） ========== */
+let model=null,extractor=null,modelState="idle",modelMsg="",modelPct=null;
+const lsCache=new Map();
+function paintModel(){
+  const el=document.getElementById("mstat");if(!el)return;
+  if(modelState==="ready") el.innerHTML=`<span class="ok">✓ 長度分析已就緒</span>`;
+  else if(modelState==="error") el.innerHTML=`<span class="bad">長度分析載入失敗：${modelMsg}</span>　<button class="link" data-act="reloadModel">重試</button>`;
+  else el.innerHTML=`<span class="warn">長度分析載入中：${modelMsg}</span>${modelPct==null?"":`<progress max="100" value="${modelPct}"></progress>`}<div class="note">載入期間可以先聽示範和錄音，只是還看不到長度條。</div>`;
+}
+async function loadModel(){
+  if(modelState==="loading"||modelState==="ready")return;
+  modelState="loading";const say=(m,p)=>{modelMsg=m;modelPct=p===undefined?null:p;paintModel();};
+  try{
+    say("程式庫");
+    const T=await import(TF_URL);
+    T.env.allowLocalModels=false;if(location.protocol==="file:") T.env.useBrowserCache=false;
+    say("模型（第一次要下載約 230 MB，之後會快取）");
+    model=await T.AutoModelForCTC.from_pretrained(MODEL_ID,{dtype:"q4",device:"wasm",progress_callback:p=>{
+      if(p.status==="progress"&&p.file&&/\.onnx/.test(p.file)){
+        const mb=x=>Math.round((x||0)/1048576),q=p.total>0?Math.min(100,p.loaded/p.total*100):null;
+        if(q!=null&&q>=100) say("把模型放進記憶體");else say(q==null?`已下載 ${mb(p.loaded)} MB`:`下載 ${Math.round(q)}%（${mb(p.loaded)} / ${mb(p.total)} MB）`,q==null?undefined:q);
+      }
+    }});
+    say("詞表");
+    extractor=await T.Wav2Vec2FeatureExtractor.from_pretrained(MODEL_ID);
+    const vj=await (await fetch(`https://huggingface.co/${MODEL_ID}/resolve/main/vocab.json`)).json();
+    const vocab=[];for(const [tok,i] of Object.entries(vj)) vocab[i]=tok;
+    SP.init(vocab);modelState="ready";paintModel();
+  }catch(e){console.error(e);modelState="error";modelMsg=String(e&&e.message||e);paintModel();}
+}
+ACT.reloadModel=()=>{modelState="idle";loadModel();};
+async function lsOfPcm(pcm){
+  if(window.__fakeLS) return window.__fakeLS(pcm);
+  const {logits}=await model(await extractor(pcm));return SP.logSoftmax(logits.dims,logits.data);
+}
+async function lsOfClip(id,pack){
+  if(!lsCache.has(id)){
+    if(!pcmCache.has(id)) pcmCache.set(id,await to16k(await clipBuffer(id,pack)));
+    lsCache.set(id,await lsOfPcm(pcmCache.get(id)));
+  }
+  return lsCache.get(id);
+}
+
+/* ========== 跟讀練習（所有課共用） ==========
+   P.steps 是要依序練的目標；每個目標：聽示範 → 錄音 → 看每一拍和示範的長度對照 → 聽自己的錄音。
+   系統只量長短，不判斷音準；清濁音、音對不對，靠自己聽示範和錄音比較。 */
+let P=null,rec=null,recStream=null,recTimer=null;
+function startPractice(cfg){   // cfg: {title, head(html), steps:[{clip,pack,kana,zh,jp,label}], back, onDone, i}
+  stopPlay();P=Object.assign({i:0,res:null,url:null,state:"idle",msg:"",tries:0,doneSteps:new Set(),passed:new Set()},cfg);renderPractice();
+  playClip(P.steps[P.i].clip,P.steps[P.i].pack);
+}
+/* 裁判：每次錄音都給「通過／沒過」。兩項都過才算通過。
+   1. 音有沒有唸到：目標的每個音，在它該出現的位置上，模型認出它的機率要夠高。
+   2. 長音／促音夠不夠長：那一拍的實際長度不能比示範短超過一成。
+   門檻是暫定的（依據目前很少的真人錄音），每次的原始數字都有存，之後用累積的資料校正。 */
+const WEAK_P=0.1,LPF_MIN=-0.3,LEN_MIN=0.9;
+function judge(res){
+  const lines=[],need=res.phones.filter(x=>!x.opt),weak=need.filter(x=>x.on<0||x.post<WEAK_P);
+  let soundOk=true;
+  if(res.logpPerFrame<LPF_MIN||weak.length>=Math.max(2,Math.ceil(need.length*0.3))){
+    soundOk=false;lines.push({cls:"bad",msg:"整段沒有對上：可能漏唸了、唸成別的音，或聲音太小。再聽一次示範，慢慢唸。"+(weak.length?"不清楚的音："+weak.map(x=>x.p).join("、"):"")});
+  }else if(weak.length){
+    soundOk=false;lines.push({cls:"bad",msg:"這個音沒聽清楚："+weak.map(x=>x.p).join("、")+"。對照示範再唸一次。"});
+  }else lines.push({cls:"ok",msg:"每個音都有唸到。"});
+  let lenOk=true;
+  if(soundOk) for(const g of res.length){
+    if(!g.feat)continue;
+    const ms=`示範 ${g.dR*20} 毫秒，你 ${g.dL*20} 毫秒`;
+    if(g.abs<LEN_MIN){
+      lenOk=false;
+      if(g.norm&&g.ratio>=LEN_MIN) lines.push({cls:"bad",seg:g.seg,msg:`「${g.seg}」的${g.feat}太短（${ms}）。你整段都唸得比示範快，放慢、照示範的速度再唸一次。`});
+      else lines.push({cls:"bad",seg:g.seg,msg:`「${g.seg}」的${g.feat}太短（${ms}）。${g.feat==="促音"?"停頓要再久一點。":"母音要再拉長一點。"}`});
+    }else lines.push({cls:"ok",seg:g.seg,msg:`「${g.seg}」的${g.feat}夠長（${ms}）。`});
+  }
+  return {pass:soundOk&&lenOk,soundOk,lenOk,lines};
+}
+function barsHtml(res,vs){
+  if(!res.length.length) return `<div class="note">對不上，沒辦法畫長度條。再錄一次試試。</div>`;
+  const mx=Math.max(...res.length.map(g=>Math.max(g.dL,g.dR))),px=f=>Math.max(2,Math.round(f/mx*100));
+  const sumL=res.length.reduce((a,g)=>a+g.dL,0),sumR=res.length.reduce((a,g)=>a+g.dR,0);
+  return `<div class="legend"><span><i></i>示範</span><span><i class="me"></i>你</span><span>你整段的速度：示範的 ${(sumR/sumL).toFixed(2)} 倍${sumR/sumL<0.8?"（比較慢，沒關係）":""}</span></div>
+  <div class="bars">${res.length.map(g=>{const v=vs.find(x=>x.seg===g.seg&&g.feat);return `<div class="beat"><div class="lab">${g.seg}${g.feat?`<em>${g.feat}</em>`:""}</div><div><div class="bar" style="width:${px(g.dR)}%"></div><div class="bar me ${v&&v.cls!=="ok"?v.cls:""}" style="width:${px(g.dL)}%"></div></div></div>`;}).join("")}</div>
+  <div class="note">每一條是一拍的長度。最後一拍量不到結尾，所以沒有畫。</div>`;
+}
+function renderPractice(){
+  const t=P.steps[P.i],n=P.steps.length;
+  let html=`<div class="top"><button class="link" data-act="pback">← 返回</button><span>${P.title}</span></div>`;
+  if(P.head) html+=P.head;
+  if(n>1) html+=`<div class="chips">${P.steps.map((s,i)=>`<button data-act="pjump" data-i="${i}" class="${i===P.i?"on":P.passed.has(i)?"done":""}">${s.label}${P.passed.has(i)?" ✓":""}</button>`).join("")}</div>`;
+  html+=`<div class="card">${t.jp?`<div class="jp">${t.jp}</div>`:""}<div class="${t.jp?"kana":"jp"}">${t.kana}</div><div class="roma">${romaji(t.kana)}</div>${t.zh?`<div class="zh">${t.zh}</div>`:""}${tips(t.kana)}
+  <div class="row"><button data-act="pplay" data-r="1">▶ 示範</button><button data-act="pplay" data-r="0.75">🐢 慢一點</button>
+  <button class="${P.state==="rec"?"rec":"primary"}" data-act="prec" ${P.state==="busy"?"disabled":""}>${P.state==="rec"?"■ 錄音中，唸完按這裡":P.state==="busy"?"分析中…":"● 錄音"}</button></div>
+  <div id="toast" class="bad" ${P.msg?"":"hidden"}>${P.msg}</div>
+  ${P.url?`<div class="note" style="margin-top:8px">我的錄音（第 ${P.tries} 次）</div><audio controls src="${P.url}"></audio>`:""}</div>`;
+  if(P.res){
+    const j=judge(P.res),vs=j.lines;
+    html+=`<div class="card"><div class="verdict ${j.pass?"ok":"bad"}">${j.pass?"✓ 通過":"✗ 沒過，再唸一次"}</div>${vs.map(v=>`<div class="fb ${v.cls}">${v.msg}</div>`).join("")}
+    <div class="note" style="margin:6px 0 10px">裁判只看兩件事：音有沒有唸到、長音和促音夠不夠長。清濁音和腔調它還判斷不了，請聽自己的錄音和示範比較。</div>
+    <h3>每一拍的長度</h3>${barsHtml(P.res,vs)}
+    <h3>每個音被認出來的機率</h3><div class="post">${P.res.phones.map(x=>`<span class="${!x.opt&&(x.on<0||x.post<WEAK_P)?"bad":""}">${x.q?"っ":""}${x.p}<br>${x.on<0?"—":Math.round(x.post*100)+"%"}</span>`).join("")}</div></div>`;
+  }else if(P.url&&modelState!=="ready") html+=`<div class="card"><div class="note">長度分析還沒載入好，這次先聽自己的錄音和示範比較。</div></div>`;
+  html+=`<div class="row" style="justify-content:space-between"><span class="note">${n>1?`第 ${P.i+1} / ${n} 步`:""}</span><button class="${P.url?"primary":""}" data-act="pnext">${P.i+1<n?"下一步 →":"完成"}</button></div>`;
+  html+=`<div id="mstat" class="note" style="margin-top:14px"></div>`;
+  h(html);paintModel();
+}
+ACT.pback=()=>{stopRec(true);stopPlay();P.back();};
+ACT.pplay=d=>{const t=P.steps[P.i];playClip(t.clip,t.pack,+d.r);};
+ACT.pjump=d=>{stopRec(true);gotoStep(+d.i);};
+function gotoStep(i){P.i=i;P.res=null;P.url=null;P.msg="";P.tries=0;P.state="idle";renderPractice();const t=P.steps[i];playClip(t.clip,t.pack);}
+ACT.pnext=()=>{
+  stopRec(true);if(P.url) P.doneSteps.add(P.i);
+  if(P.i+1<P.steps.length) return gotoStep(P.i+1);
+  stopPlay();P.onDone();
+};
+function stopRec(discard){
+  clearTimeout(recTimer);
+  if(rec&&rec.state==="recording"){if(discard) rec.onstop=()=>{recStream&&recStream.getTracks().forEach(t=>t.stop());};rec.stop();}
+}
+ACT.prec=async()=>{
+  if(P.state==="rec"){stopRec(false);return;}
+  stopPlay();P.msg="";
+  try{recStream=await navigator.mediaDevices.getUserMedia({audio:true});}
+  catch(e){P.msg="拿不到麥克風："+(e.message||e)+"。請確認有接麥克風，並在網址列左邊允許這個網頁使用。";return renderPractice();}
+  const mine=P,step=P.i,t=P.steps[step],chunks=[];
+  rec=new MediaRecorder(recStream);
+  rec.ondataavailable=e=>chunks.push(e.data);
+  rec.onstop=async()=>{
+    recStream.getTracks().forEach(x=>x.stop());
+    if(P!==mine||P.i!==step)return;
+    const blob=new Blob(chunks,{type:rec.mimeType});
+    if(P.url) URL.revokeObjectURL(P.url);
+    P.url=URL.createObjectURL(blob);P.tries++;P.res=null;P.state="busy";renderPractice();
+    try{
+      const pcm=await to16k(await ac().decodeAudioData(await blob.arrayBuffer()));
+      if(modelState==="ready"){
+        const t1=performance.now(),res=SP.analyse(await lsOfPcm(pcm),t.kana,await lsOfClip(t.clip,t.pack));
+        if(P!==mine||P.i!==step)return;
+        P.res=res;if(judge(res).pass) P.passed.add(step);logAttempt(t,pcm.length/16000,res,(performance.now()-t1)/1000);
+      }else logAttempt(t,pcm.length/16000,null,0);
+    }catch(e){console.error(e);P.msg="分析失敗："+(e.message||e);}
+    if(P===mine&&P.i===step){P.state="idle";renderPractice();}
+  };
+  rec.start();P.state="rec";renderPractice();
+  recTimer=setTimeout(()=>stopRec(false),Math.round(((D.sec[t.clip]||2)*2.5+2)*1000));   // 忘了按停止也會自己停
+};
+function logAttempt(t,sec,res,calc){
+  const j=res?judge(res):null;
+  S.att[t.clip]=(S.att[t.clip]||0)+1;if(j&&j.pass) S.pass[t.clip]=(S.pass[t.clip]||0)+1;
+  S.log.push({at:Date.now(),clip:t.clip,kana:t.kana,audioSec:+sec.toFixed(1),calcSec:+calc.toFixed(1),
+    pass:j?j.pass:null,soundOk:j?j.soundOk:null,lenOk:j?j.lenOk:null,
+    lpf:res?res.logpPerFrame:null,greedy:res?res.greedy:null,
+    post:res?res.phones.map(x=>x.p+":"+(x.on<0?"-":x.post)).join(" "):null,
+    beats:res?res.length.map(g=>({seg:g.seg,feat:g.feat,dL:g.dL,dR:g.dR,abs:g.abs,ratio:g.ratio,norm:g.norm})):null});
+  if(S.log.length>600) S.log.shift();
+  save();
+}
+
+/* ========== 首頁 ========== */
+const leafName=id=>{const L=D.leaves.find(x=>x.id===id),pl=D.places.find(x=>x.id===L.place);return `${pl.icon} ${pl.name} · ${L.way}`;};
+const phOf=id=>D.phrases.find(p=>p.id===id);
+function phraseStat(p){const q=S.ph[p.id];return q?`練過 ${q.n} 次${q.ok?" ✓":""}`:"還沒練";}
+function suggestions(){
+  const now=Date.now(),out=[];
+  const due=D.phrases.filter(p=>S.ph[p.id]&&S.ph[p.id].dueAt<=now).sort((a,b)=>S.ph[a.id].dueAt-S.ph[b.id].dueAt);
+  for(const p of due.slice(0,3)) out.push({act:"phrase",id:p.id,label:p.jp,sub:"該複習了"});
+  const L=D.lessons.find(l=>l.items.some(it=>!S.pass[it.clip]));
+  if(L) out.push({act:"lesson",id:L.id,label:"基礎："+L.name,sub:L.goal});
+  const touched=new Set(Object.keys(S.ph).map(id=>phOf(id)&&phOf(id).leaf));
+  const next=D.phrases.find(p=>!S.ph[p.id]&&touched.has(p.leaf));
+  if(next) out.push({act:"phrase",id:next.id,label:next.jp,sub:"同一個場景的下一句"});
+  return out.slice(0,5);
+}
+function home(){
+  P=null;stopPlay();
+  const sg=suggestions(),nAtt=S.log.length;
+  h(`<h1>旅遊日語發音課</h1><p class="sub">聽示範、跟著唸、看自己每一拍和示範差多少。資料只存在這台裝置。</p>
+  <div class="card"><div id="mstat"></div></div>
+  ${sg.length?`<div class="card list"><h3>今天建議先練</h3>${sg.map(s=>`<button data-act="${s.act}" data-id="${s.id}"><span>${s.label}</span><small>${s.sub}</small></button>`).join("")}</div>`:""}
+  <div class="card list"><h3>基礎發音（建議照順序）</h3>${D.lessons.map((l,i)=>{const d=l.items.filter(it=>S.pass[it.clip]).length;return `<button data-act="lesson" data-id="${l.id}"><span>${i+1}. ${l.name}</span><small>${d} / ${l.items.length}</small></button>`;}).join("")}</div>
+  <div class="card list"><h3>場景句子</h3>${D.leaves.map(L=>{const ps=D.phrases.filter(p=>p.leaf===L.id),d=ps.filter(p=>S.ph[p.id]).length;return `<button data-act="scene" data-id="${L.id}"><span>${leafName(L.id)}</span><small>${d} / ${ps.length}</small></button>`;}).join("")}</div>
+  <div class="row"><button data-act="data">我的資料（已錄 ${nAtt} 次）</button></div>`);
+  paintModel();
+}
+ACT.home=()=>home();
+
+/* ========== 基礎課 ========== */
+ACT.lesson=d=>lesson(d.id);
+function lesson(id){
+  P=null;stopPlay();const L=D.lessons.find(l=>l.id===id),q=S.lesson[id]||{};
+  h(`<div class="top"><button class="link" data-act="home">← 首頁</button><span>基礎發音</span></div>
+  <h2>${L.name}</h2><p class="sub">${L.goal}</p>
+  <div class="card">${L.how.map(p=>`<p style="margin:6px 0">${p}</p>`).join("")}</div>
+  ${L.pairs.length?`<div class="card"><h3>先用聽的：點一下，左右比較</h3>${L.pairs.map(p=>`<div class="duo">${[p.a,p.b].map(w=>`<button data-act="wplay" data-clip="${w.clip}"><div class="w">${w.kana}</div><div class="roma">${romaji(w.kana)}</div><div class="note">${w.zh}</div></button>`).join("")}</div>`).join("")}
+  <div class="row"><button data-act="quiz" data-id="${L.id}">聽辨練習（6 題）</button><span class="note">${q.qn?`做過 ${q.qn} 題，答對 ${q.qok} 題`:""}</span></div></div>`:""}
+  <div class="card list"><h3>開口練：跟著唸</h3>${L.items.map((it,i)=>`<button data-act="litem" data-id="${L.id}" data-i="${i}"><span><b>${it.kana}</b>　<span class="roma">${romaji(it.kana)}</span>　${it.zh}</span><small class="${S.pass[it.clip]?"ok":""}">${S.pass[it.clip]?"✓ 通過":S.att[it.clip]?"錄過 "+S.att[it.clip]+" 次，還沒過":"還沒練"}</small></button>`).join("")}</div>
+  <div id="toast" class="bad" hidden></div>`);
+}
+ACT.wplay=d=>playClip(d.clip,"basics");
+ACT.litem=d=>{
+  const L=D.lessons.find(l=>l.id===d.id);
+  startPractice({title:L.name,i:+d.i,steps:L.items.map((it,i)=>({clip:it.clip,pack:"basics",kana:it.kana,zh:it.zh,label:String(i+1)})),back:()=>lesson(L.id),onDone:()=>lesson(L.id)});
+};
+let Q=null;
+ACT.quiz=d=>{const L=D.lessons.find(l=>l.id===d.id);Q={L,i:0,ok:0,n:6,cur:null};quizNext();};
+function quizNext(){const p=Q.L.pairs[Math.floor(Math.random()*Q.L.pairs.length)],ans=Math.random()<0.5?"a":"b";Q.cur={p,ans,pick:null};renderQuiz();playClip(p[ans].clip,"basics");}
+function renderQuiz(){
+  const c=Q.cur,cls=k=>c.pick==null?"":(k===c.ans?"right":k===c.pick?"hit":"");
+  h(`<div class="top"><button class="link" data-act="lesson" data-id="${Q.L.id}">← 返回</button><span>${Q.L.name} · 聽辨 ${Q.i+1} / ${Q.n}</span></div>
+  <div class="card"><h3>聽到的是哪一個？</h3><div class="row"><button data-act="qagain">▶ 再聽一次</button></div>
+  <div class="duo">${["a","b"].map(k=>`<button data-act="${c.pick==null?"qpick":"wplay"}" data-k="${k}" data-clip="${c.p[k].clip}" class="${cls(k)}"><div class="w">${c.p[k].kana}</div><div class="roma">${romaji(c.p[k].kana)}</div><div class="note">${c.p[k].zh}</div></button>`).join("")}</div>
+  ${c.pick==null?"":`<div class="fb ${c.pick===c.ans?"ok":"bad"}">${c.pick===c.ans?"答對了":"這題是「"+c.p[c.ans].kana+"」"}</div><div class="note">兩個都可以再點來聽。</div><div class="row"><button class="primary" data-act="qnext">${Q.i+1<Q.n?"下一題":"完成"}</button></div>`}</div><div id="toast" class="bad" hidden></div>`);
+}
+ACT.qagain=()=>playClip(Q.cur.p[Q.cur.ans].clip,"basics");
+ACT.qpick=d=>{if(Q.cur.pick!=null)return;Q.cur.pick=d.k;if(d.k===Q.cur.ans) Q.ok++;renderQuiz();};
+ACT.qnext=()=>{
+  Q.i++;if(Q.i<Q.n) return quizNext();
+  const q=S.lesson[Q.L.id]=S.lesson[Q.L.id]||{};q.qn=(q.qn||0)+Q.n;q.qok=(q.qok||0)+Q.ok;save();lesson(Q.L.id);
+};
+
+/* ========== 場景句子 ========== */
+ACT.scene=d=>scene(d.id);
+function scene(id){
+  P=null;stopPlay();loadPack(id).catch(()=>{});
+  const ps=D.phrases.filter(p=>p.leaf===id);
+  h(`<div class="top"><button class="link" data-act="home">← 首頁</button><span>場景句子</span></div>
+  <h2>${leafName(id)}</h2>
+  <div class="card list">${ps.map(p=>`<button data-act="phrase" data-id="${p.id}"><span><span class="note">${p.k==="h"?"店員說":"你想說"}</span><br><b>${p.jp}</b><br>${p.zh}</span><small>${phraseStat(p)}</small></button>`).join("")}</div>`);
+}
+ACT.phrase=d=>{
+  const p=phOf(d.id),steps=[];
+  p.chunks.forEach((c,i)=>steps.push({clip:c.clip,pack:p.leaf,kana:c.kana,label:"第 "+(i+1)+" 段"}));
+  steps.push({clip:p.clip,pack:p.leaf,kana:p.kana,jp:p.jp,zh:p.zh,label:"整句"});
+  if(p.re) steps.push({clip:p.re.clip,pack:p.leaf,kana:p.re.kana,jp:p.re.jp,zh:"回應："+p.re.zh,label:"回應"});
+  startPractice({title:leafName(p.leaf),head:`<div class="card"><div class="note">${p.k==="h"?"店員說":"你想說"}</div><div style="font-size:18px;font-weight:600">${p.jp}</div><div>${p.zh}</div><div class="row"><button data-act="wholeplay" data-id="${p.id}">▶ 聽整句</button></div></div>`,
+    steps,back:()=>scene(p.leaf),onDone:()=>rate(p,P.passed.has(p.chunks.length))});
+};
+ACT.wholeplay=d=>{const p=phOf(d.id);playClip(p.clip,p.leaf);};
+function rate(p,wholePassed){
+  h(`<div class="top"><span>${leafName(p.leaf)}</span></div><h2>${p.jp}</h2><p class="sub">${p.zh}</p>
+  <div class="card"><div class="verdict ${wholePassed?"ok":"bad"}">${wholePassed?"✓ 整句通過":"✗ 整句還沒通過"}</div>
+  <div class="note">${wholePassed?"幾天後會再請你複習。":"明天會再出現。"}如果你不同意裁判，可以自己改：</div>
+  <div class="duo"><button class="${wholePassed?"primary":""}" data-act="rated" data-id="${p.id}" data-ok="1">算通過</button><button class="${wholePassed?"":"primary"}" data-act="rated" data-id="${p.id}" data-ok="0">還要再練</button></div></div>`);
+}
+ACT.rated=d=>{
+  const ok=d.ok==="1",q=S.ph[d.id]=S.ph[d.id]||{n:0,st:0,ok:false,dueAt:0};
+  q.n++;q.last=Date.now();q.ok=ok;q.st=ok?Math.min(4,q.st+1):0;q.dueAt=Date.now()+(ok?[1,3,7,14][q.st-1]*DAY:0.8*DAY);
+  save();scene(phOf(d.id).leaf);
+};
+
+/* ========== 我的資料 ========== */
+ACT.data=()=>{
+  P=null;stopPlay();
+  const feats=S.log.flatMap(l=>(l.beats||[]).filter(b=>b.feat).map(b=>({...b,at:l.at,kana:l.kana}))),nPass=S.log.filter(l=>l.pass===true).length,nFail=S.log.filter(l=>l.pass===false).length;
+  const withRes=S.log.filter(l=>l.beats).length;
+  h(`<div class="top"><button class="link" data-act="home">← 首頁</button><span>我的資料</span></div>
+  <div class="card"><div>錄音 ${S.log.length} 次，其中 ${withRes} 次有長度分析</div><div>裁判：通過 ${nPass} 次，沒過 ${nFail} 次（其中音沒唸到 ${S.log.filter(l=>l.soundOk===false).length} 次、長度太短 ${S.log.filter(l=>l.lenOk===false).length} 次）</div><div>練過的句子：${Object.keys(S.ph).length} / ${D.phrases.length}</div></div>
+  <div class="card"><h3>最近 10 次有長音或促音的錄音</h3>${feats.slice(-10).reverse().map(b=>`<div class="note">${new Date(b.at).toLocaleString()}　${b.kana}　${b.seg}（${b.feat}）　你 ${b.dL*20} 毫秒／示範 ${b.dR*20} 毫秒</div>`).join("")||`<div class="note">還沒有</div>`}</div>
+  <div class="row"><button data-act="export">匯出 JSON</button><button class="link" data-act="reset">全部重來</button></div>
+  <div id="exp" hidden><textarea id="expt" readonly></textarea><div class="row"><button data-act="copy">複製</button><span id="copyMsg" class="note"></span></div></div>`);
+};
+ACT.export=()=>{document.getElementById("expt").value=JSON.stringify({page:"speak.html v2",when:new Date().toISOString(),ua:navigator.userAgent,model:modelState,...S},null,1);document.getElementById("exp").hidden=false;};
+ACT.copy=async()=>{const t=document.getElementById("expt");t.select();try{await navigator.clipboard.writeText(t.value);document.getElementById("copyMsg").textContent="已複製";}catch(e){try{document.execCommand("copy");document.getElementById("copyMsg").textContent="已複製";}catch(_){}}};
+ACT.reset=()=>{if(confirm("清除這台裝置上的所有練習紀錄？")){S=fresh();save();home();}};
+
+if(!D.lessons.length||!window.SP){app.innerHTML=`<p class="bad" style="margin-top:40px">資料檔沒有載到（speak_data.js 或 speech_core.js），請重新整理。</p>`;}
+else{home();loadPack("basics").catch(()=>{});loadModel();}
+</script>
+</body>
+</html>
