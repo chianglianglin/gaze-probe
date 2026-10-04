@@ -46,6 +46,7 @@ textarea{width:100%;height:160px;font:12px/1.4 ui-monospace,Menlo,Consolas,monos
     </select>
     <button class="primary" id="btnLoad">載入模型</button>
   </div>
+  <progress id="bar" max="100" value="0" hidden style="width:100%;height:14px"></progress>
   <div id="loadMsg" class="note">還沒載入。第一次要下載模型，之後瀏覽器會快取。</div>
 </div>
 
@@ -89,7 +90,7 @@ const TF_URL="https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/
 const MODEL_ID="qnighy/wav2vec2-xlsr-53-espeak-cv-ft-ONNX";
 const $=id=>document.getElementById(id);
 const CLIPS=window.CLIPS||[];
-const REPORT={page:"speech.html v2",model:MODEL_ID,ua:navigator.userAgent,backend:null,dtype:null,loadSec:null,recordings:[],selftest:null};
+const REPORT={page:"speech.html v4",model:MODEL_ID,ua:navigator.userAgent,backend:null,dtype:null,loadSec:null,recordings:[],selftest:null};
 function showReport(){$("out").value=JSON.stringify(REPORT,null,1);}
 const tick=()=>new Promise(r=>{const c=new MessageChannel();c.port1.onmessage=()=>r();c.port2.postMessage(0);});
 
@@ -97,29 +98,45 @@ const tick=()=>new Promise(r=>{const c=new MessageChannel();c.port1.onmessage=()
 let model=null,extractor=null;
 async function loadModel(){
   const sel=$("backend").value,device=sel==="webgpu"?"webgpu":"wasm",dtype=sel==="webgpu"?"q4f16":"q4";
-  $("btnLoad").disabled=true;const t0=performance.now();
-  const say=m=>{$("loadMsg").textContent=m;};
+  $("btnLoad").disabled=true;$("btnLoad").textContent="載入中…";$("loadMsg").className="note";const t0=performance.now(),bar=$("bar");
+  // 進度顯示：stage 是目前階段的文字，pct 是下載百分比（沒有就顯示跑動條），每 0.5 秒更新已經過的秒數
+  let stage="",pct=null;
+  const paint=()=>{
+    const el=Math.round((performance.now()-t0)/1000);
+    if(pct==null) bar.removeAttribute("value");else bar.value=pct;
+    $("loadMsg").textContent=`${stage}（已 ${el} 秒）`;
+  };
+  const say=(s,p)=>{stage=s;pct=p===undefined?null:p;paint();};
+  bar.hidden=false;const timer=setInterval(paint,500);
   try{
     if(device==="webgpu"&&!navigator.gpu) throw new Error("這個瀏覽器沒有 WebGPU，請改選 WASM");
-    say("載入程式庫…");
+    say("步驟 1/3：載入程式庫");
     const T=await import(TF_URL);
     T.env.allowLocalModels=false;
     if(location.protocol==="file:") T.env.useBrowserCache=false;     // 直接開檔案時瀏覽器不能快取模型，每次都會重新下載
+    say("步驟 2/3：下載模型（如果之前下載過會直接跳過）");
     model=await T.AutoModelForCTC.from_pretrained(MODEL_ID,{dtype,device,progress_callback:p=>{
-      if(p.status==="progress"&&p.file){const mb=x=>(x/1048576).toFixed(0);say(`下載模型 ${p.file}：${mb(p.loaded)} / ${mb(p.total)} MB`);}
-      else if(p.status==="done") say("下載完成，準備中…");
+      if(p.status==="progress"&&p.file&&/\.onnx/.test(p.file)){
+        const mb=x=>Math.round((x||0)/1048576),has=p.total>0,q=has?Math.min(100,p.loaded/p.total*100):null;
+        if(q!=null&&q>=100) say("步驟 3/3：把模型放進記憶體（這一步沒有百分比，通常 5 到 30 秒）");
+        else say(has?`步驟 2/3：下載模型 ${Math.round(q)}%（${mb(p.loaded)} / ${mb(p.total)} MB）`:`步驟 2/3：下載模型，已下載 ${mb(p.loaded)} MB`,q==null?undefined:q);
+      }else if(p.status==="done"&&p.file&&/\.onnx/.test(p.file)) say("步驟 3/3：把模型放進記憶體（這一步沒有百分比，通常 5 到 30 秒）");
     }});
+    say("步驟 3/3：載入前處理設定與詞表");
     extractor=await T.Wav2Vec2FeatureExtractor.from_pretrained(MODEL_ID);
     const vj=await (await fetch(`https://huggingface.co/${MODEL_ID}/resolve/main/vocab.json`)).json();
     const vocab=[];for(const [tok,i] of Object.entries(vj)) vocab[i]=tok;
     SP.init(vocab);
+    clearInterval(timer);bar.hidden=true;
     REPORT.backend=device;REPORT.dtype=dtype;REPORT.loadSec=+((performance.now()-t0)/1000).toFixed(1);
-    say(`模型已載入（${device} / ${dtype}，${REPORT.loadSec} 秒）`);
+    $("loadMsg").innerHTML=`<span class="ok" style="font-size:17px;font-weight:600">✓ 模型已載入，可以到下面錄音了</span>　（${device} / ${dtype}，${REPORT.loadSec} 秒）`;
+    $("btnLoad").textContent="已載入 ✓";
     $("btnTest").disabled=false;$("btnRec").disabled=false;$("btnRecBad").disabled=false;showReport();
     return true;
   }catch(e){
-    console.error(e);say("載入失敗："+(e&&e.message||e));REPORT.loadError=String(e&&e.message||e);showReport();
-    $("btnLoad").disabled=false;model=null;return false;
+    clearInterval(timer);bar.hidden=true;
+    console.error(e);$("loadMsg").textContent="載入失敗："+(e&&e.message||e)+"　請再按一次「載入模型」。";REPORT.loadError=String(e&&e.message||e);showReport();
+    $("loadMsg").className="bad";$("btnLoad").disabled=false;$("btnLoad").textContent="載入模型";model=null;return false;
   }
 }
 /* pcm: Float32Array，單聲道 16 kHz → 每格（20 毫秒）對詞表的 log 機率 */
@@ -161,24 +178,25 @@ async function blobToPcm16k(blob){
   const src=off.createBufferSource();src.buffer=ab;src.connect(off.destination);src.start();
   return (await off.startRendering()).getChannelData(0);
 }
+function recSay(m,cls){const e=$("recMsg");e.textContent=m;e.className=cls||"note";e.style.fontSize=cls&&cls!=="note"?"16px":"";}
 const REC_LABEL={correct:"● 錄音：跟著示範唸",wrong:"● 錄音：跟著唸錯的版本唸"};
 async function toggleRec(mode){
   if(rec&&rec.state==="recording"){rec.stop();return;}
   try{recStream=await navigator.mediaDevices.getUserMedia({audio:true});}
-  catch(e){$("recMsg").textContent="拿不到麥克風："+(e.message||e);return;}
+  catch(e){recSay("拿不到麥克風："+(e.message||e)+"　請確認電腦有接麥克風，並在網址列左邊允許這個網頁使用麥克風。","bad");return;}
   recMode=mode;const btn=mode==="wrong"?$("btnRecBad"):$("btnRec"),other=mode==="wrong"?$("btnRec"):$("btnRecBad");
   chunks=[];rec=new MediaRecorder(recStream);
   rec.ondataavailable=e=>chunks.push(e.data);
   rec.onstop=async()=>{
-    recStream.getTracks().forEach(t=>t.stop());btn.textContent=REC_LABEL[mode];other.disabled=false;$("recMsg").textContent="分析中…";
+    recStream.getTracks().forEach(t=>t.stop());btn.textContent=REC_LABEL[mode];btn.classList.remove("primary");other.disabled=false;recSay("分析中，請等幾秒…","warn");
     try{await analyse(await blobToPcm16k(new Blob(chunks,{type:rec.mimeType})),curTarget(),mode);}
-    catch(e){console.error(e);$("recMsg").textContent="處理失敗："+(e.message||e);}
+    catch(e){console.error(e);recSay("處理失敗："+(e.message||e),"bad");}
   };
-  rec.start();btn.textContent="■ 停止";other.disabled=true;$("recMsg").textContent="錄音中…唸完按停止。";
+  rec.start();btn.textContent="■ 錄音中，唸完按這裡停止";btn.classList.add("primary");other.disabled=true;recSay("● 錄音中…唸完按藍色的按鈕停止。","bad");
 }
 async function analyse(pcm,t,mode){
   const t1=performance.now(),L=await lsOfPcm(pcm),R=await lsOfClip(t.clip,1),res=SP.analyse(L,t.kana,R),sec=(performance.now()-t1)/1000;
-  $("recMsg").textContent=`完成（語音 ${(pcm.length/16000).toFixed(1)} 秒，運算 ${sec.toFixed(1)} 秒）`;
+  recSay(`完成（語音 ${(pcm.length/16000).toFixed(1)} 秒，運算 ${sec.toFixed(1)} 秒）。結果在下面。`,"ok");
   const pct=x=>Math.round(x*100)+"%";
   const expect=mode==="wrong"?`這次是跟著「唸錯的版本」唸（${t.note}），系統應該要在下面指出問題。`:mode==="correct"?"這次是跟著示範唸，理想情況下不該有紅字。":"";
   $("recOut").innerHTML=`<div class="note" style="margin-top:10px">${expect}</div><h3>回饋</h3>${res.fb.length?res.fb.map(f=>`<div class="fb bad">${f.msg}</div>`).join(""):`<div class="fb ok">長度和清濁音都沒有發現問題</div>`}
@@ -222,9 +240,10 @@ $("btnPlayBad").addEventListener("click",()=>playPcm(clipPcm(curTarget().bad)));
 $("btnCopy").addEventListener("click",async()=>{const t=$("out");t.select();try{await navigator.clipboard.writeText(t.value);$("copyMsg").textContent="已複製";}catch(e){try{document.execCommand("copy");$("copyMsg").textContent="已複製";}catch(_){$("copyMsg").textContent="複製失敗，請手動全選複製";}}});
 $("btnPlay").disabled=!CLIPS.length;$("btnPlayBad").disabled=!CLIPS.length;showReport();
 if(!CLIPS.length) $("testMsg").textContent="找不到 speech_clips.js（要和這個檔案放在同一個資料夾）";
-if(location.hash.startsWith("#selftest")){
+// 開頁面就自動載入模型（不用再按按鈕）；網址加 #selftest 會接著跑自我測試
+if(CLIPS.length&&window.SP){
   if(location.hash.includes("webgpu")) $("backend").value="webgpu";
-  loadModel().then(ok=>{if(ok) selfTest();});
+  loadModel().then(ok=>{if(ok&&location.hash.startsWith("#selftest")) selfTest();});
 }
 </script>
 </body>
