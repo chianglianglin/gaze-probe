@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Math Probe · 一元一次方程式</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1d1d1f;--mut:#6b6b70;--line:#e2e0d8;--acc:#2f6fed;--ok:#1a8f4c;--bad:#c8402f;--warn:#b7791f;--chip:#eef2fb}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1f1f23;--ink:#eeeef0;--mut:#9a9aa2;--line:#33333a;--acc:#6f9dff;--ok:#4cc47f;--bad:#f07a68;--warn:#e0a94a;--chip:#262b3a}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif}
+#app{max-width:560px;margin:0 auto;padding:16px 16px 96px}
+h1{font-size:26px;margin:24px 0 4px}
+h2{font-size:20px;margin:16px 0 4px}
+h3{font-size:15px;margin:0 0 8px;color:var(--mut);font-weight:600}
+.sub{color:var(--mut);margin:0 0 16px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:12px 0}
+button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px 16px}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+button.link{border:0;background:none;color:var(--mut);padding:6px 8px;font-size:14px}
+.stack>button{display:block;width:100%;margin:10px 0}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--mut)}
+.cats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cat{padding:12px 4px;text-align:center;font-size:14px}
+.cat .big{display:block;font-size:34px;line-height:1.2}
+.cat.open{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc) inset}
+.item{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.item:first-of-type{border-top:0}
+.iname{flex:0 0 96px;font-weight:600}
+.iname span{font-size:24px;margin-right:4px;vertical-align:middle}
+.ways{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 12px;border-radius:999px;font-size:14px}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:center;gap:12px}
+.bar>div{max-width:560px}
+.tag{display:inline-block;font-size:12px;background:var(--chip);border-radius:999px;padding:2px 10px;margin-right:6px;color:var(--mut)}
+.tag.ok{color:var(--ok)}
+.tag.new{color:var(--warn)}
+.story{font-size:18px;line-height:1.7;margin:8px 0}
+.eq{font-size:24px;font-weight:600;letter-spacing:.5px;margin:8px 0;font-variant-numeric:tabular-nums}
+.ctx{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ctx button{font-size:13px;padding:6px 10px;border-radius:999px}
+.ans{display:flex;gap:8px;align-items:center;margin:12px 0}
+.ans input{flex:1;min-width:0;font:inherit;font-size:20px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.ans .u{color:var(--mut)}
+ol.steps{margin:6px 0 0;padding-left:22px}
+ol.steps li{margin:4px 0}
+ol.steps b{font-variant-numeric:tabular-nums}
+ol.steps span{color:var(--mut);font-size:13px;margin-left:8px}
+.pick button{display:block;width:100%;text-align:left;margin:6px 0;font-variant-numeric:tabular-nums}
+.pick button.hit{border-color:var(--bad);color:var(--bad)}
+.msg{margin:10px 0;padding:10px 12px;border-radius:12px;font-size:15px}
+.msg.good{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)}
+.msg.bad{background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad)}
+.msg.info{background:var(--chip);color:var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--mut);font-weight:600;font-size:12px}
+th,td.n{white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.meter{display:inline-block;width:40px;height:6px;border-radius:3px;background:var(--line);vertical-align:middle;margin-left:6px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--acc)}
+details{font-size:13px;color:var(--mut);margin-top:12px}
+details pre{white-space:pre-wrap;margin:6px 0 0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace}
+textarea{width:100%;height:140px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px}
+.note{font-size:13px;color:var(--mut)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+/* ========== 內容：大類 → 項目 → 接觸方式 ========== */
+const CATS=[
+ {id:"sport",name:"運動",icon:"🏃"},
+ {id:"game",name:"遊戲",icon:"🎮"},
+ {id:"music",name:"音樂",icon:"🎵"},
+ {id:"food",name:"美食",icon:"🍜"}];
+const ITEMS=[
+ {id:"bball",cat:"sport",name:"籃球",icon:"🏀"},
+ {id:"swim",cat:"sport",name:"游泳",icon:"🏊"},
+ {id:"run",cat:"sport",name:"跑步",icon:"👟"},
+ {id:"mobile",cat:"game",name:"手遊",icon:"📱"},
+ {id:"board",cat:"game",name:"桌遊",icon:"🎲"},
+ {id:"sandbox",cat:"game",name:"蓋方塊",icon:"🧱"},
+ {id:"listen",cat:"music",name:"聽歌",icon:"🎧"},
+ {id:"inst",cat:"music",name:"樂器",icon:"🎸"},
+ {id:"sing",cat:"music",name:"唱歌",icon:"🎤"},
+ {id:"tea",cat:"food",name:"手搖飲",icon:"🧋"},
+ {id:"bake",cat:"food",name:"烘焙",icon:"🍪"},
+ {id:"market",cat:"food",name:"夜市",icon:"🏮"}];
+const P2=["小安","小宇"];
+/* 每個情境：who 主詞、fixed 起始量 {b}、rate 每單位 {a}、total 總量 {c}、ask 問句、same 兩人比較問句、unit 答案單位
+   r 可覆寫數字範圍：a 每單位量、b 起始量、x 答案、k 倍數（金額用） */
+const LEAVES=[
+ {id:"bball_play",item:"bball",way:"自己打",who:P2,fixed:"原本已經投進 {b} 球",rate:"每場比賽投進 {a} 球",total:"現在累計投進 {c} 球",ask:"這段期間打了幾場比賽？",same:"打幾場比賽後，兩人累計投進的球數一樣多？",unit:"場"},
+ {id:"bball_watch",item:"bball",way:"看比賽",who:["藍隊","紅隊"],fixed:"開賽先拿下 {b} 分",rate:"每分鐘得 {a} 分",total:"目前共得 {c} 分",ask:"比賽進行了幾分鐘？",same:"幾分鐘後兩隊同分？",unit:"分鐘",r:{a:[2,5]}},
+ {id:"swim_do",item:"swim",way:"自己游",who:P2,fixed:"原本已經游了 {b} 趟",rate:"每天練習游 {a} 趟",total:"目前累計游了 {c} 趟",ask:"練習了幾天？",same:"練習幾天後，兩人累計游的趟數一樣多？",unit:"天"},
+ {id:"swim_watch",item:"swim",way:"看比賽",who:["藍隊","紅隊"],fixed:"原本已有 {b} 面獎牌",rate:"每天比賽拿下 {a} 面獎牌",total:"目前累計 {c} 面獎牌",ask:"比賽進行了幾天？",same:"比賽幾天後，兩隊的獎牌數一樣多？",unit:"天",r:{a:[2,5]}},
+ {id:"run_do",item:"run",way:"自己跑",who:P2,fixed:"熱身先跑了 {b} 分鐘",rate:"每圈跑 {a} 分鐘",total:"總共跑了 {c} 分鐘",ask:"跑了幾圈？",same:"各跑幾圈後，兩人花的時間一樣多？",unit:"圈"},
+ {id:"run_watch",item:"run",way:"看比賽",who:["甲選手","乙選手"],fixed:"原本已經跑了 {b} 公里",rate:"每小時跑 {a} 公里",total:"目前共跑了 {c} 公里",ask:"以這個速度跑了幾小時？",same:"再過幾小時，兩位選手跑的距離一樣多？",unit:"小時",r:{a:[8,14],b:[2,12],x:[2,5]}},
+ {id:"mobile_play",item:"mobile",way:"自己玩",who:P2,fixed:"原本有 {b} 顆鑽石",rate:"每過一關拿到 {a} 顆鑽石",total:"現在共有 {c} 顆鑽石",ask:"過了幾關？",same:"各過幾關後，兩人的鑽石一樣多？",unit:"關"},
+ {id:"mobile_watch",item:"mobile",way:"看實況",who:["甲實況主","乙實況主"],fixed:"開台時已有 {b} 位觀眾",rate:"每分鐘多 {a} 位觀眾",total:"現在共有 {c} 位觀眾",ask:"開台幾分鐘了？",same:"開台幾分鐘後，兩台的觀眾一樣多？",unit:"分鐘",r:{b:[5,40]}},
+ {id:"board_play",item:"board",way:"自己玩",who:P2,fixed:"開局先拿到 {b} 分",rate:"每回合得 {a} 分",total:"現在共有 {c} 分",ask:"玩了幾回合？",same:"幾回合後兩人同分？",unit:"回合"},
+ {id:"board_collect",item:"board",way:"收集卡牌",who:P2,fixed:"原本有 {b} 張卡",rate:"每開一包多 {a} 張卡",total:"現在共有 {c} 張卡",ask:"開了幾包？",same:"各開幾包後，兩人的卡一樣多？",unit:"包",r:{a:[3,8]}},
+ {id:"sandbox_build",item:"sandbox",way:"自己蓋",who:P2,fixed:"原本已經放了 {b} 個方塊",rate:"每分鐘放 {a} 個方塊",total:"現在共放了 {c} 個方塊",ask:"蓋了幾分鐘？",same:"各蓋幾分鐘後，兩人放的方塊一樣多？",unit:"分鐘",r:{b:[5,30]}},
+ {id:"sandbox_watch",item:"sandbox",way:"看影片",who:["甲頻道","乙頻道"],fixed:"原本有 {b} 部影片",rate:"每週上傳 {a} 部影片",total:"現在共有 {c} 部影片",ask:"過了幾週？",same:"幾週後兩個頻道的影片一樣多？",unit:"週",r:{a:[2,5]}},
+ {id:"listen_list",item:"listen",way:"做歌單",who:["小安的歌單","小宇的歌單"],fixed:"原本有 {b} 首歌",rate:"每天加入 {a} 首歌",total:"現在共有 {c} 首歌",ask:"過了幾天？",same:"幾天後兩人的歌單一樣長？",unit:"天"},
+ {id:"listen_fan",item:"listen",way:"追新歌",who:["甲樂團的新歌","乙樂團的新歌"],fixed:"上線時已有 {b} 萬次播放",rate:"每天增加 {a} 萬次播放",total:"現在共有 {c} 萬次播放",ask:"過了幾天？",same:"幾天後兩首歌的播放次數一樣多？",unit:"天"},
+ {id:"inst_play",item:"inst",way:"自己練",who:P2,fixed:"原本已經會彈 {b} 首曲子",rate:"每個月學會 {a} 首曲子",total:"現在共會彈 {c} 首曲子",ask:"學了幾個月？",same:"幾個月後，兩人會彈的曲子一樣多？",unit:"個月",r:{a:[2,5],b:[1,8]}},
+ {id:"inst_watch",item:"inst",way:"看表演",who:["甲樂團","乙樂團"],fixed:"開場先演奏了 {b} 分鐘",rate:"每首歌演奏 {a} 分鐘",total:"目前共演奏了 {c} 分鐘",ask:"演奏了幾首歌？",same:"各演奏幾首歌後，兩團演奏的時間一樣長？",unit:"首",r:{a:[3,6],b:[2,10]}},
+ {id:"sing_self",item:"sing",way:"自己唱",who:P2,fixed:"原本已經會唱 {b} 首歌",rate:"每週練會 {a} 首歌",total:"現在共會唱 {c} 首歌",ask:"練了幾週？",same:"幾週後，兩人會唱的歌一樣多？",unit:"週",r:{a:[2,5]}},
+ {id:"sing_watch",item:"sing",way:"看歌唱比賽",who:["甲選手","乙選手"],fixed:"初賽拿到 {b} 分",rate:"每一輪得到 {a} 分",total:"目前累計 {c} 分",ask:"比了幾輪？",same:"比幾輪後，兩位選手同分？",unit:"輪",r:{x:[2,6]}},
+ {id:"tea_buy",item:"tea",way:"買來喝",who:["小安的集點卡","小宇的集點卡"],fixed:"原本有 {b} 點",rate:"每買一杯多 {a} 點",total:"現在共有 {c} 點",ask:"買了幾杯？",same:"各買幾杯後，兩張卡的點數一樣多？",unit:"杯"},
+ {id:"tea_shop",item:"tea",way:"開店賣",who:["甲店","乙店"],fixed:"開門前先外送了 {b} 杯",rate:"每小時賣出 {a} 杯",total:"目前共賣出 {c} 杯",ask:"開門幾小時了？",same:"開門幾小時後，兩家店賣出的杯數一樣多？",unit:"小時",r:{a:[4,9],b:[2,12]}},
+ {id:"bake_do",item:"bake",way:"自己做",who:P2,fixed:"原本已經烤好 {b} 片餅乾",rate:"每一盤烤出 {a} 片餅乾",total:"現在共有 {c} 片餅乾",ask:"烤了幾盤？",same:"各烤幾盤後，兩人的餅乾一樣多？",unit:"盤",r:{a:[4,9]}},
+ {id:"bake_buy",item:"bake",way:"買來吃",who:P2,fixed:"先花 {b} 元買蛋糕",rate:"買的泡芙每個 {a} 元",total:"總共花了 {c} 元",ask:"買了幾個泡芙？",same:"各買幾個泡芙後，兩人花的錢一樣多？",unit:"個",r:{k:5,a:[3,8],b:[4,16]}},
+ {id:"market_eat",item:"market",way:"去逛去吃",who:P2,fixed:"先花 {b} 元買雞排",rate:"買的烤肉每串 {a} 元",total:"總共花了 {c} 元",ask:"買了幾串烤肉？",same:"各買幾串烤肉後，兩人花的錢一樣多？",unit:"串",r:{k:5,a:[2,6],b:[10,18]}},
+ {id:"market_stall",item:"market",way:"自己擺攤",who:["甲攤","乙攤"],fixed:"開攤時錢箱有 {b} 元",rate:"每賣一份多 {a} 元",total:"現在錢箱有 {c} 元",ask:"賣了幾份？",same:"各賣幾份後，兩攤錢箱的錢一樣多？",unit:"份",r:{k:5,a:[4,12],b:[10,40]}}];
+const LEAF=Object.fromEntries(LEAVES.map(l=>[l.id,l]));
+const ITEM=Object.fromEntries(ITEMS.map(i=>[i.id,i]));
+const CAT=Object.fromEntries(CATS.map(c=>[c.id,c]));
+const catOf=id=>ITEM[LEAF[id].item].cat;
+const pathOf=id=>{const L=LEAF[id],I=ITEM[L.item];return `${I.icon} ${I.name} · ${L.way}`;};
+
+const METHODS={
+ ex:{name:"先看範例",desc:"看一題完整解法，再做類似題"},
+ pr:{name:"直接練習",desc:"自己先做，錯了才給提示"},
+ er:{name:"找錯誤",desc:"找出別人的解法錯在哪一步"}};
+const LEVELS={1:"ax = c",2:"ax + b = c",3:"ax + b = cx + d"};
+const EXPLORE=0.15;     // 探索比例：試沒選過的同大類情境
+const KEY="mathprobe_v1";
+
+/* ========== 產題與驗算 ========== */
+function ri(lo,hi){return lo+Math.floor(Math.random()*(hi-lo+1));}
+function fill(s,o){return s.replace(/\{(\w)\}/g,(_,k)=>o[k]);}
+function eqStr(p){return p.level===1?`${p.a}x = ${p.c}`:p.level===2?`${p.a}x + ${p.b} = ${p.c}`:`${p.a}x + ${p.b} = ${p.c}x + ${p.d}`;}
+function story(p,L){
+  const A=L.who[0],B=L.who[1];
+  if(p.level===1) return A+fill(L.rate,{a:p.a})+"，"+fill(L.total,{c:p.c})+"。"+L.ask;
+  if(p.level===2) return A+fill(L.fixed,{b:p.b})+"，之後"+fill(L.rate,{a:p.a})+"，"+fill(L.total,{c:p.c})+"。"+L.ask;
+  return A+fill(L.fixed,{b:p.b})+"，之後"+fill(L.rate,{a:p.a})+"；"+B+fill(L.fixed,{b:p.d})+"，之後"+fill(L.rate,{a:p.c})+"。"+L.same;
+}
+function gen(level,L){
+  const R=Object.assign({a:[2,9],b:[1,12],x:[2,9],k:1},L&&L.r||{});
+  const k=R.k,x=ri(R.x[0],R.x[1]);let p;
+  if(level===1){const a=k*ri(R.a[0],R.a[1]);p={level,a,c:a*x};}
+  else if(level===2){const a=k*ri(R.a[0],R.a[1]),b=k*ri(R.b[0],R.b[1]);p={level,a,b,c:a*x+b};}
+  else{const a0=ri(R.a[0]+2,R.a[1]),c0=ri(R.a[0],a0-2),b=k*ri(R.b[0],R.b[1]);p={level,a:k*a0,b,c:k*c0,d:b+k*(a0-c0)*x};}
+  p.x=x;p.leaf=L?L.id:null;p.unit=L?L.unit:"";p.text=L?story(p,L):null;p.eq=eqStr(p);
+  return p;
+}
+/* 驗算器：不信任產題端宣告的答案，自己重解，並比對文字裡的數字。之後接 LLM 產情境時，同一支函式把關。 */
+function solve(p){
+  let A,B;
+  if(p.level===1){A=p.a;B=p.c;}else if(p.level===2){A=p.a;B=p.c-p.b;}else{A=p.a-p.c;B=p.d-p.b;}
+  return A===0?NaN:B/A;
+}
+function verify(p){
+  const errs=[],x=solve(p);
+  const need=p.level===1?[p.a,p.c]:p.level===2?[p.b,p.a,p.c]:[p.b,p.a,p.d,p.c];
+  if(need.some(n=>!Number.isInteger(n)||n<=0)) errs.push("數字必須是正整數");
+  if(!Number.isInteger(x)) errs.push("答案不是整數");
+  else if(x<1||x>30) errs.push("答案超出合理範圍");
+  if(x!==p.x) errs.push("重解的答案與宣告的答案不符");
+  if(p.text!=null){
+    const got=(p.text.match(/\d+/g)||[]).map(Number).sort((m,n)=>m-n),want=need.slice().sort((m,n)=>m-n);
+    if(got.length!==want.length||got.some((v,i)=>v!==want[i])) errs.push("文字裡的數字與方程式不一致");
+    if(!/[？?]$/.test(p.text)) errs.push("題目沒有以問句結尾");
+  }
+  return errs;
+}
+function makeProblem(level,L){
+  for(let i=0;i<30;i++){
+    const p=gen(level,L);S.gen++;
+    if(verify(p).length===0) return p;
+    S.rej++;
+  }
+  const p=gen(level,null);return p;
+}
+function stepsOf(p){
+  if(p.level===1) return [{t:`${p.a}x = ${p.c}`,w:"列式"},{t:`x = ${p.c} ÷ ${p.a}`,w:`兩邊同除以 ${p.a}`},{t:`x = ${p.x}`,w:"算出答案"}];
+  if(p.level===2) return [{t:`${p.a}x + ${p.b} = ${p.c}`,w:"列式"},{t:`${p.a}x = ${p.c} − ${p.b}`,w:`兩邊同減 ${p.b}`},{t:`${p.a}x = ${p.c-p.b}`,w:"算出右邊"},{t:`x = ${p.x}`,w:`兩邊同除以 ${p.a}`}];
+  const A=p.a-p.c,B=p.d-p.b;
+  return [{t:`${p.a}x + ${p.b} = ${p.c}x + ${p.d}`,w:"列式"},{t:`${p.a}x − ${p.c}x = ${p.d} − ${p.b}`,w:`兩邊同減 ${p.c}x，再同減 ${p.b}`},{t:`${A}x = ${B}`,w:"兩邊各自合併"},{t:`x = ${p.x}`,w:`兩邊同除以 ${A}`}];
+}
+function r2(v){return Math.round(v*100)/100;}
+function wrongSteps(p){
+  const {a,b,c,d,x}=p,eq=eqStr(p);let v=[];
+  if(p.level===1){
+    v.push({s:[eq,`x = ${c} − ${a}`,`x = ${c-a}`],w:1,fix:`${a}x 是「${a} 乘以 x」，要兩邊同除以 ${a}：x = ${c} ÷ ${a}`,ans:c-a});
+    v.push({s:[eq,`x = ${c} × ${a}`,`x = ${c*a}`],w:1,fix:`要兩邊同除以 ${a}，不是乘：x = ${c} ÷ ${a}`,ans:c*a});
+  }else if(p.level===2){
+    v.push({s:[eq,`${a}x = ${c} + ${b}`,`${a}x = ${c+b}`,`x = ${r2((c+b)/a)}`],w:1,fix:`要消掉左邊的 +${b}，是兩邊同減 ${b}：${a}x = ${c} − ${b}`,ans:(c+b)/a});
+    v.push({s:[eq,`${a}x = ${c} − ${b}`,`${a}x = ${c-b}`,`x = ${c-b} − ${a} = ${c-b-a}`],w:3,fix:`${a}x 是乘法，要兩邊同除以 ${a}：x = ${c-b} ÷ ${a}`,ans:c-b-a});
+  }else{
+    v.push({s:[eq,`${a}x + ${c}x = ${d} − ${b}`,`${a+c}x = ${d-b}`,`x = ${r2((d-b)/(a+c))}`],w:1,fix:`右邊的 ${c}x 移到左邊要變成減：${a}x − ${c}x = ${d} − ${b}`,ans:(d-b)/(a+c)});
+    v.push({s:[eq,`${a}x − ${c}x = ${d} + ${b}`,`${a-c}x = ${d+b}`,`x = ${r2((d+b)/(a-c))}`],w:1,fix:`左邊的 +${b} 移到右邊要變成減：${a}x − ${c}x = ${d} − ${b}`,ans:(d+b)/(a-c)});
+    v.push({s:[eq,`${a}x − ${c}x = ${d} − ${b}`,`${a+c}x = ${d-b}`,`x = ${r2((d-b)/(a+c))}`],w:2,fix:`${a}x − ${c}x 是 ${a-c}x，不是 ${a+c}x`,ans:(d-b)/(a+c)});
+  }
+  v=v.filter(o=>o.ans!==x);
+  return v[ri(0,v.length-1)];
+}
+
+/* ========== 狀態（存在這台裝置的瀏覽器裡） ========== */
+function fresh(){return {v:1,picked:[],leaf:{},method:{ex:{a:1,b:1,n:0},pr:{a:1,b:1,n:0},er:{a:1,b:1,n:0}},level:1,streak:0,diag:null,attn:[],attnEst:8,gen:0,rej:0,count:0,lastM:null,prevM:null,log:[]};}
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));return s&&s.v===1?s:null;}catch(e){return null;}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+let S=load()||fresh();
+function st(id){return S.leaf[id]||(S.leaf[id]={a:S.picked.includes(id)?2:1,b:1,n:0,last:-99,blocked:false,swaps:0,likes:0});}
+
+/* ========== 選擇邏輯 ========== */
+function gauss(){let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random());}
+function sampleBeta(a,b){const m=a/(a+b),v=a*b/((a+b)*(a+b)*(a+b+1));return Math.min(1,Math.max(0,m+Math.sqrt(v)*gauss()));}
+function pickMethod(){
+  let best=null,bs=-1;const why=[];
+  for(const k of Object.keys(METHODS)){
+    const m=S.method[k];let s=sampleBeta(m.a,m.b),pen=1;
+    if(k===S.lastM) pen=(k===S.prevM)?0.6:0.85;      // 連續用同一種教法會扣分（換口味）
+    s*=pen;why.push(`${METHODS[k].name}：抽樣 ${s.toFixed(2)}（平均 ${(m.a/(m.a+m.b)).toFixed(2)}，用過 ${m.n} 次${pen<1?"，連用扣分 ×"+pen:""}）`);
+    if(s>bs){bs=s;best=k;}
+  }
+  S.prevM=S.lastM;S.lastM=best;
+  return {k:best,why:why.join("\n")};
+}
+function recency(id){const since=S.count-st(id).last;return 1-Math.pow(0.5,since/2);}   // 剛出過的情境分數打折，隔幾題後恢復
+function pickLeaf(exclude){
+  const okId=id=>!st(id).blocked&&id!==exclude;
+  if(Math.random()<EXPLORE){
+    const cats=new Set(S.picked.map(catOf));
+    const sib=LEAVES.filter(L=>cats.has(ITEM[L.item].cat)&&!S.picked.includes(L.id)&&okId(L.id));
+    if(sib.length){const L=sib[ri(0,sib.length-1)];return {leaf:L,explore:true,why:"探索：試一個同大類、你沒選過的情境"};}
+  }
+  let pool=S.picked.filter(okId);
+  if(!pool.length) pool=S.picked.filter(id=>!st(id).blocked);
+  if(!pool.length) pool=LEAVES.map(L=>L.id).filter(okId);
+  if(!pool.length) return {leaf:null,explore:false,why:"沒有可用情境，改出純算式"};
+  let best=null,bs=-1;const why=[];
+  for(const id of pool){
+    const q=st(id),rc=recency(id),s=sampleBeta(q.a,q.b)*rc;
+    why.push(`${pathOf(id)}：${s.toFixed(2)}（喜好 ${(q.a/(q.a+q.b)).toFixed(2)} × 新鮮度 ${rc.toFixed(2)}）`);
+    if(s>bs){bs=s;best=id;}
+  }
+  return {leaf:LEAF[best],explore:false,why:why.join("\n")};
+}
+
+/* ========== 畫面 ========== */
+const app=document.getElementById("app");
+const ACT={};
+let pickSel=null,pickOpen=null,dg=null,ses=null,cur=null;
+function h(html){app.innerHTML=html;}
+app.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b||b.disabled)return;const f=ACT[b.dataset.act];if(f)f(b.dataset);});
+app.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.id==="ans"){e.preventDefault();const b=app.querySelector("[data-act=submit],[data-act=dsubmit]");if(b)b.click();}});
+function focusAns(){const i=document.getElementById("ans");if(i)i.focus({preventScroll:true});}
+
+function home(){
+  ses=null;cur=null;
+  h(`<h1>一元一次方程式</h1><p class="sub">依你的興趣出題，邊學邊調整教法。資料只存在這台裝置。</p>
+  <div class="stack">${S.diag
+    ?`<button class="primary" data-act="go">繼續學習（Lv${S.level}）</button><button data-act="dash">我的資料</button><button data-act="pick">重新選興趣</button><button class="link" data-act="reset">全部重來</button>`
+    :`<button class="primary" data-act="pick">開始</button>`}</div>`);
+}
+ACT.reset=()=>{if(confirm("清除這台裝置上的所有學習資料？")){S=fresh();save();home();}};
+ACT.dash=()=>dash();
+ACT.home=()=>home();
+ACT.go=()=>startSession();
+
+/* ----- 興趣選擇 ----- */
+ACT.pick=()=>{pickSel=new Set(S.picked);pickOpen=new Set(S.picked.map(catOf));renderPick();};
+function renderPick(){
+  const n=pickSel.size;
+  h(`<h2>你喜歡什麼？</h2><p class="sub">點開大類，選你真的喜歡的那幾種（至少 2 個）。題目會用這些來出。</p>
+  <div class="cats">${CATS.map(c=>`<button class="cat ${pickOpen.has(c.id)?"open":""}" data-act="cat" data-id="${c.id}"><span class="big">${c.icon}</span>${c.name}</button>`).join("")}</div>
+  ${CATS.filter(c=>pickOpen.has(c.id)).map(c=>`<div class="card"><h3>${c.icon} ${c.name}</h3>${ITEMS.filter(i=>i.cat===c.id).map(i=>`<div class="item"><div class="iname"><span>${i.icon}</span>${i.name}</div><div class="ways">${LEAVES.filter(L=>L.item===i.id).map(L=>`<button class="chip ${pickSel.has(L.id)?"on":""}" data-act="leaf" data-id="${L.id}">${L.way}</button>`).join("")}</div></div>`).join("")}</div>`).join("")}
+  <div class="bar"><span>已選 ${n} 個</span><button class="primary" data-act="pickdone" ${n<2?"disabled":""}>下一步</button></div>`);
+}
+ACT.cat=d=>{pickOpen.has(d.id)?pickOpen.delete(d.id):pickOpen.add(d.id);renderPick();};
+ACT.leaf=d=>{pickSel.has(d.id)?pickSel.delete(d.id):pickSel.add(d.id);renderPick();};
+ACT.pickdone=()=>{
+  S.picked=[...pickSel];
+  for(const id of S.picked){const q=st(id);q.blocked=false;if(q.n===0){q.a=2;q.b=1;}}
+  save();S.diag?startSession():startDiag();
+};
+
+/* ----- 入門診斷 ----- */
+function startDiag(){dg={q:[1,2,3].map(l=>makeProblem(l,null)),i:0,res:[]};renderDiag();}
+function renderDiag(){
+  const p=dg.q[dg.i];
+  h(`<div class="top"><span>先做 3 題，看從哪裡開始 · ${dg.i+1}/3</span></div>
+  <div class="card"><div class="eq">${p.eq}</div><div class="ans"><span>x =</span><input id="ans" type="number" inputmode="numeric" autocomplete="off"><button class="primary" data-act="dsubmit">送出</button></div>
+  <button class="link" data-act="dskip">不會，跳過</button></div>`);
+  focusAns();
+}
+function diagNext(ok){
+  dg.res.push(ok);dg.i++;
+  if(dg.i<3) return renderDiag();
+  const firstFail=dg.res.indexOf(false);
+  S.level=firstFail<0?3:firstFail+1;S.streak=0;
+  const all=firstFail<0;
+  // 起始偏好：還不會的人先看範例，已經會的人直接練習（之後由資料修正）
+  S.method=all?{ex:{a:1,b:1.5,n:0},pr:{a:2,b:1,n:0},er:{a:1.5,b:1,n:0}}:{ex:{a:2,b:1,n:0},pr:{a:1,b:1,n:0},er:{a:1,b:1.5,n:0}};
+  S.diag={res:dg.res,at:Date.now(),start:S.level};save();
+  h(`<h2>從 Lv${S.level} 開始</h2><p class="sub">題型：${LEVELS[S.level]}</p>
+  <div class="card">${dg.res.map((r,i)=>`<div>Lv${i+1}　${LEVELS[i+1]}　${r?"✓":"✗"}</div>`).join("")}</div>
+  <p class="note">每一回合有 2 題：先用一種教法學一題，再做一題沒有提示的檢查題。系統用檢查題的結果判斷哪種教法對你有效。</p>
+  <div class="stack"><button class="primary" data-act="go">開始學習</button></div>`);
+}
+ACT.dsubmit=()=>{const v=parseInt(document.getElementById("ans").value,10);if(isNaN(v))return focusAns();diagNext(v===dg.q[dg.i].x);};
+ACT.dskip=()=>diagNext(false);
+
+/* ----- 學習回合 ----- */
+function startSession(){ses={t0:Date.now(),times:[],drift:null,rounds:0,asked:false,hidden:0};startRound();}
+function elapsedMin(){return (Date.now()-ses.t0)/60000;}
+function startRound(){
+  ses.rounds++;
+  const m=pickMethod(),pk=pickLeaf(null);
+  cur={phase:"teach",method:m.k,mWhy:m.why,leaf:pk.leaf,explore:pk.explore,lWhy:pk.why,teach:null};
+  buildItem();renderItem();
+}
+function buildItem(){
+  cur.p=makeProblem(S.level,cur.leaf);cur.tries=0;cur.done=false;cur.msg="";cur.liked=false;cur.t0=Date.now();cur.sol=false;cur.up="";
+  cur.ex=null;cur.er=null;
+  if(cur.phase==="teach"&&cur.method==="ex"){for(let i=0;i<10;i++){cur.ex=makeProblem(S.level,cur.leaf);if(cur.ex.eq!==cur.p.eq)break;}}
+  if(cur.phase==="teach"&&cur.method==="er"){cur.er=wrongSteps(cur.p);cur.found=false;cur.erTries=0;cur.hit=-1;}
+}
+function stepsHtml(arr){return `<ol class="steps">${arr.map(s=>`<li><b>${s.t}</b><span>${s.w||""}</span></li>`).join("")}</ol>`;}
+function solutionHtml(p){return `<div class="card"><h3>解法</h3>${p.text?`<div class="note">設 x 是要求的${p.unit}數</div>`:""}${stepsHtml(stepsOf(p))}<div>答：${p.x} ${p.unit}</div></div>`;}
+function renderItem(){
+  const p=cur.p,teach=cur.phase==="teach",m=cur.method;
+  let html=`<div class="top"><span>第 ${ses.rounds} 回合 · ${teach?METHODS[m].name:"檢查題"} · Lv${S.level}</span><button class="link" data-act="end">結束</button></div>`;
+  if(teach&&m==="ex") html+=`<div class="card"><h3>範例</h3>${cur.ex.text?`<div>${cur.ex.text}</div><div class="note">設 x 是要求的${cur.ex.unit}數</div>`:""}${stepsHtml(stepsOf(cur.ex))}<div>答：${cur.ex.x} ${cur.ex.unit}</div></div><h3>換你做</h3>`;
+  html+=`<div class="card">`;
+  if(cur.leaf) html+=`<div><span class="tag">${pathOf(cur.leaf.id)}</span>${cur.explore?`<span class="tag new">試試新口味</span>`:""}<span class="tag ok">✓ 已驗算</span></div><div class="story">${p.text}</div>
+    <div class="ctx"><button data-act="like" ${cur.liked?"disabled":""}>👍 喜歡這個情境</button>${cur.done?"":`<button data-act="swap">🔄 換一個情境</button><button data-act="block">🚫 不要再出這個</button>`}</div>`;
+  else html+=`<div class="eq">${p.eq}</div>`;
+  html+=`</div>`;
+  if(teach&&m==="er"){
+    html+=`<div class="card pick"><h3>另一位同學這樣解，有一步錯了。${cur.found?"":"點出錯的那一步："}</h3>${cur.er.s.map((s,i)=>`<button data-act="erpick" data-i="${i}" class="${cur.found&&i===cur.er.w?"hit":""}" ${cur.found?"disabled":""}>${i+1}.　${s}</button>`).join("")}</div>`;
+  }
+  const canAnswer=!cur.done&&!(teach&&m==="er"&&!cur.found);
+  if(cur.msg) html+=cur.msg;
+  if(canAnswer) html+=`<div class="ans"><span>${teach&&m==="er"?"正確答案":"答案"}</span><input id="ans" type="number" inputmode="numeric" autocomplete="off"><span class="u">${p.unit}</span><button class="primary" data-act="submit">送出</button></div>`;
+  if(cur.done){
+    if(cur.sol) html+=solutionHtml(p);
+    if(cur.up) html+=`<div class="msg info">${cur.up}</div>`;
+    html+=`<div class="stack"><button class="primary" data-act="next">${teach?"下一題：檢查題":"下一回合"}</button></div>`;
+  }
+  html+=`<details><summary>系統為什麼出這題</summary><pre>教法（每回合抽一次）\n${cur.mWhy}\n\n情境\n${cur.lWhy}</pre></details>`;
+  h(html);
+  if(canAnswer) focusAns();
+}
+const good=t=>`<div class="msg good">${t}</div>`,bad=t=>`<div class="msg bad">${t}</div>`,info=t=>`<div class="msg info">${t}</div>`;
+ACT.erpick=d=>{
+  const i=+d.i;
+  if(i===cur.er.w){cur.found=true;cur.hit=i;cur.msg=good(`對，第 ${i+1} 步錯了。${cur.er.fix}`);}
+  else{cur.erTries++;if(cur.erTries>=2){cur.found=true;cur.msg=info(`錯的是第 ${cur.er.w+1} 步。${cur.er.fix}`);}else cur.msg=bad(`第 ${i+1} 步沒有問題，再找找。`);}
+  renderItem();
+};
+ACT.submit=()=>{
+  const v=parseInt(document.getElementById("ans").value,10);if(isNaN(v))return focusAns();
+  cur.tries++;const ok=v===cur.p.x;
+  if(cur.phase==="teach"){
+    if(ok){cur.done=true;cur.ok=cur.tries===1;cur.msg=good("答對了！");cur.sol=cur.tries>1;}
+    else if(cur.tries===1){cur.msg=bad("還不對。")+info(cur.p.text?`提示：設 x 是要求的${cur.p.unit}數，可以列成 ${cur.p.eq}`:`提示：第一步是「${stepsOf(cur.p)[1].w}」`);}
+    else{cur.done=true;cur.ok=false;cur.sol=true;cur.msg=bad("沒關係，看一下解法。");}
+  }else{
+    if(ok){cur.done=true;cur.msg=good(cur.tries===1?"答對了！":"這次對了。");}
+    else if(cur.tries===1){cur.msg=bad("不對，再試一次（檢查題沒有提示）。");}
+    else{cur.done=true;cur.sol=true;cur.msg=bad("這題先記下來，看一下解法。");}
+    cur.checkOk=ok;
+  }
+  if(cur.done) finishItem();
+  renderItem();
+};
+function median(a){const s=a.slice().sort((x,y)=>x-y),n=s.length;return n?(n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2):0;}
+function finishItem(){
+  const t=(Date.now()-cur.t0)/1000;
+  if(ses.times.length>=3){const md=median(ses.times);if(ses.drift==null&&t>30&&t>2.5*md) ses.drift=+elapsedMin().toFixed(1);}   // 這題明顯比平常久：可能開始分心
+  ses.times.push(t);S.count++;
+  if(cur.leaf){const q=st(cur.leaf.id),r=cur.liked?1:0.6;q.n++;q.last=S.count;q.a+=r;q.b+=1-r;}
+  if(cur.phase==="check"){
+    const first=cur.checkOk&&cur.tries===1,second=cur.checkOk&&cur.tries===2;
+    const speed=Math.min(1,Math.max(0,1-(t-15)/60));
+    const r=first?0.7+0.3*speed:second?0.4:0;
+    const m=S.method[cur.method];m.a+=r;m.b+=1-r;m.n++;
+    if(first) S.streak=Math.max(1,S.streak+1);else if(!cur.checkOk) S.streak=Math.min(-1,S.streak-1);else S.streak=0;
+    if(S.streak>=2&&S.level<3){S.level++;S.streak=0;cur.up=`連續答對，升到 Lv${S.level}（${LEVELS[S.level]}）`;}
+    else if(S.streak<=-2&&S.level>1){S.level--;S.streak=0;cur.up=`先回到 Lv${S.level}（${LEVELS[S.level]}）把基礎補穩`;}
+    S.log.push({at:Date.now(),method:cur.method,level:cur.p.level,teachLeaf:cur.teach.leaf,teachOk:cur.teach.ok,checkLeaf:cur.leaf?cur.leaf.id:null,checkTries:cur.tries,checkOk:!!cur.checkOk,sec:+t.toFixed(1),reward:+r.toFixed(2)});
+    if(S.log.length>300) S.log.shift();
+  }
+  save();
+}
+ACT.like=()=>{
+  if(!cur.leaf||cur.liked)return;cur.liked=true;const q=st(cur.leaf.id);q.likes++;
+  if(cur.done){q.a+=0.4;q.b=Math.max(0.1,q.b-0.4);}
+  if(!S.picked.includes(cur.leaf.id)) S.picked.push(cur.leaf.id);   // 探索到喜歡的，就加入你的清單
+  save();renderItem();
+};
+function reLeaf(){
+  const pk=pickLeaf(cur.leaf?cur.leaf.id:null);
+  cur.leaf=pk.leaf;cur.explore=pk.explore;cur.lWhy=pk.why;buildItem();renderItem();
+}
+ACT.swap=()=>{if(!cur.leaf)return;const q=st(cur.leaf.id);q.swaps++;q.b+=1;q.last=S.count;save();reLeaf();};
+ACT.block=()=>{if(!cur.leaf)return;const id=cur.leaf.id;st(id).blocked=true;S.picked=S.picked.filter(x=>x!==id);save();reLeaf();};
+ACT.next=()=>{
+  if(cur.phase==="teach"){
+    const pk=pickLeaf(cur.leaf?cur.leaf.id:null);
+    cur={phase:"check",method:cur.method,mWhy:cur.mWhy,leaf:pk.leaf,explore:pk.explore,lWhy:pk.why,teach:{leaf:cur.leaf?cur.leaf.id:null,ok:!!cur.ok}};
+    buildItem();renderItem();
+  }else{
+    if(!ses.asked&&elapsedMin()>=S.attnEst){
+      ses.asked=true;
+      h(`<h2>已經學了 ${Math.round(elapsedMin())} 分鐘</h2><p class="sub">要休息一下嗎？</p><div class="stack"><button class="primary" data-act="rest">休息</button><button data-act="more">再學一下</button></div>`);
+    }else startRound();
+  }
+};
+ACT.more=()=>{S.attnEst=Math.min(30,+(S.attnEst*1.15).toFixed(1));save();startRound();};
+ACT.rest=()=>endSession("break");
+ACT.end=()=>endSession("user");
+function endSession(reason){
+  if(ses){
+    const dur=+elapsedMin().toFixed(1),items=ses.times.length;
+    if(items>0){
+      S.attn.push({at:Date.now(),min:dur,items,drift:ses.drift,hidden:ses.hidden,reason});
+      if(S.attn.length>50) S.attn.shift();
+      if(items>=4&&dur>=2){const target=Math.max(3,ses.drift!=null?ses.drift:dur);S.attnEst=+(0.6*S.attnEst+0.4*target).toFixed(1);}
+    }
+    save();
+  }
+  ses=null;cur=null;dash();
+}
+document.addEventListener("visibilitychange",()=>{if(ses&&document.hidden) ses.hidden++;});
+
+/* ----- 我的資料 ----- */
+function meter(v){return `<span class="meter"><i style="width:${Math.round(v*100)}%"></i></span>`;}
+function dash(){
+  const ms=Object.keys(METHODS).map(k=>({k,...S.method[k],mean:S.method[k].a/(S.method[k].a+S.method[k].b)})).sort((x,y)=>y.mean-x.mean);
+  const ls=Object.keys(S.leaf).map(id=>({id,...S.leaf[id],mean:S.leaf[id].a/(S.leaf[id].a+S.leaf[id].b)})).filter(l=>l.n>0||l.swaps>0||l.blocked||S.picked.includes(l.id)).sort((x,y)=>(x.blocked-y.blocked)||(y.mean-x.mean));
+  const last=S.attn.slice(-5).reverse();
+  h(`<h2>我的資料</h2><p class="sub">目前程度 Lv${S.level}（${LEVELS[S.level]}）· 已做 ${S.count} 題</p>
+  <div class="card"><h3>教法效果（用檢查題的結果算）</h3><table><tr><th>教法</th><th class="n">回合</th><th class="n">估計</th></tr>
+  ${ms.map(m=>`<tr><td>${METHODS[m.k].name}</td><td class="n">${m.n}</td><td class="n">${m.mean.toFixed(2)}${meter(m.mean)}</td></tr>`).join("")}</table></div>
+  <div class="card"><h3>情境喜好</h3>${ls.length?`<table><tr><th>情境</th><th class="n">出過</th><th class="n">👍</th><th class="n">🔄</th><th class="n">估計</th></tr>
+  ${ls.map(l=>`<tr><td>${pathOf(l.id)}${l.blocked?" 🚫":S.picked.includes(l.id)?"":"（探索）"}</td><td class="n">${l.n}</td><td class="n">${l.likes}</td><td class="n">${l.swaps}</td><td class="n">${l.blocked?"—":l.mean.toFixed(2)+meter(l.mean)}</td></tr>`).join("")}</table>`:`<div class="note">還沒有資料</div>`}</div>
+  <div class="card"><h3>專注長度</h3><div>目前估計：約 ${S.attnEst} 分鐘（到這個時間會問要不要休息）</div>
+  ${last.length?`<table><tr><th>最近幾次</th><th class="n">分鐘</th><th class="n">題數</th><th class="n">變慢的時間點</th></tr>${last.map(a=>`<tr><td>${new Date(a.at).toLocaleDateString()}</td><td class="n">${a.min}</td><td class="n">${a.items}</td><td class="n">${a.drift==null?"—":a.drift+" 分"}</td></tr>`).join("")}</table>`:""}</div>
+  <div class="card"><h3>題目驗算</h3><div>產生 ${S.gen} 題，驗算退回 ${S.rej} 題</div></div>
+  <p class="note">次數少於 5 的估計值還不可靠，只代表目前的猜測。</p>
+  <div class="stack"><button class="primary" data-act="go">${S.diag?"繼續學習":"開始"}</button><button data-act="export">匯出 JSON</button><button data-act="pick">重新選興趣</button><button class="link" data-act="home">回首頁</button></div>
+  <div id="exp" hidden><textarea id="expt" readonly></textarea><button data-act="copy">複製</button></div>`);
+}
+ACT.export=async()=>{
+  const txt=JSON.stringify({when:new Date().toISOString(),...S},null,1),name="math_"+new Date().toISOString().replace(/[:.]/g,"-")+".json";
+  document.getElementById("expt").value=txt;document.getElementById("exp").hidden=false;
+  try{const f=new File([txt],name,{type:"application/json"});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});}}catch(e){}
+};
+ACT.copy=async()=>{const t=document.getElementById("expt");t.select();try{await navigator.clipboard.writeText(t.value);}catch(e){try{document.execCommand("copy");}catch(_){}}};
+
+home();
+</script>
+</body>
+</html>
