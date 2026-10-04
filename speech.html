@@ -35,7 +35,7 @@ textarea{width:100%;height:160px;font:12px/1.4 ui-monospace,Menlo,Consolas,monos
 <body>
 <main>
 <h1>發音模型測試</h1>
-<p class="sub">在瀏覽器裡跑音素辨識模型（wav2vec2 XLSR-53），不用伺服器，聲音不會上傳。做法是把目標句子的音素強制對齊到你的聲音上：長音和促音看每一拍的長度（和示範音比），清濁音看哪一種的機率高。</p>
+<p class="sub">在瀏覽器裡跑音素辨識模型（wav2vec2 XLSR-53），不用伺服器，聲音不會上傳。做法是把目標的音素強制對齊到你的聲音上，量長音和促音那一拍的長度，和示範音比。目前只有這一項測過可用。</p>
 
 <div class="card">
   <h2>1. 載入模型</h2>
@@ -64,7 +64,7 @@ textarea{width:100%;height:160px;font:12px/1.4 ui-monospace,Menlo,Consolas,monos
     <button id="btnRecBad" disabled>● 錄音：跟著唸錯的版本唸</button>
   </div>
   <div id="badNote" class="note"></div>
-  <div id="recMsg" class="note">不用會日語：每一段只有 3 到 6 拍。先按 ▶ 聽（可以多聽幾次），再按 ● 錄音，照聽到的聲音跟著唸，唸完再按一次停止。有兩種版本的各錄一次。</div>
+  <div id="recMsg" class="note">不用會日語：每一段只有 3 到 6 拍。先按 ▶ 聽（可以多聽幾次），再按 ● 錄音，照聽到的聲音跟著唸，唸完再按一次停止。兩種版本各錄一次，共 6 段。</div>
   <div id="recOut"></div>
 </div>
 
@@ -82,16 +82,17 @@ textarea{width:100%;height:160px;font:12px/1.4 ui-monospace,Menlo,Consolas,monos
 </div>
 </main>
 
-<script src="speech_clips.js"></script>
-<script src="speech_chunks.js"></script>
-<script src="speech_core.js"></script>
+<!-- 檔名後面的 ?v= 每次改版都要換，瀏覽器才不會用到舊的快取 -->
+<script src="speech_clips.js?v=1"></script>
+<script src="speech_chunks.js?v=7"></script>
+<script src="speech_core.js?v=7"></script>
 <script>
 "use strict";
 const TF_URL="https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.min.js";
 const MODEL_ID="qnighy/wav2vec2-xlsr-53-espeak-cv-ft-ONNX";
 const $=id=>document.getElementById(id);
 const CLIPS=window.CLIPS||[];
-const REPORT={page:"speech.html v5",model:MODEL_ID,ua:navigator.userAgent,backend:null,dtype:null,loadSec:null,recordings:[],chunktest:null,selftest:null};
+const REPORT={page:"speech.html v7",model:MODEL_ID,ua:navigator.userAgent,backend:null,dtype:null,loadSec:null,recordings:[],chunktest:null,selftest:null};
 function showReport(){$("out").value=JSON.stringify(REPORT,null,1);}
 const tick=()=>new Promise(r=>{const c=new MessageChannel();c.port1.onmessage=()=>r();c.port2.postMessage(0);});
 
@@ -165,7 +166,8 @@ function playPcm(f){
 /* ========== 錄音 ========== */
 /* 目標是 3 到 6 拍的小段。有「唸錯的版本」的小段只差一個音（少了促音、長音變短、清濁互換）。 */
 const CHUNKS=window.CHUNKS||[];
-const TARGETS=CHUNKS.map(c=>({label:c.said+"（"+c.zh+"）"+(c.bad?"":"　※沒有唸錯的版本"),kana:c.kana,clip:c,bad:c.bad||null,note:c.bad?c.bad.note:null}));
+const LEN_CHUNKS=CHUNKS.filter(c=>c.cat==="sokuon"||c.cat==="long");   // 目前只有長音／促音的長度比對可用，所以只列這 6 段
+const TARGETS=LEN_CHUNKS.map(c=>({label:c.said+"（"+c.zh+"）",kana:c.kana,clip:c,bad:c.bad||null,note:c.bad?c.bad.note:null}));
 $("target").innerHTML=TARGETS.map((t,i)=>`<option value="${i}">${t.label}</option>`).join("");
 const curTarget=()=>TARGETS[+$("target").value];
 let modelReady=false;
@@ -203,16 +205,17 @@ async function analyse(pcm,t,mode){
   const t1=performance.now(),L=await lsOfPcm(pcm),R=await lsOfClip(t.clip,1),res=SP.analyse(L,t.kana,R),sec=(performance.now()-t1)/1000;
   recSay(`完成（語音 ${(pcm.length/16000).toFixed(1)} 秒，運算 ${sec.toFixed(1)} 秒）。結果在下面。`,"ok");
   const pct=x=>Math.round(x*100)+"%";
-  const expect=mode==="wrong"?`這次是跟著「唸錯的版本」唸（${t.note}），系統應該要在下面指出這個問題。`:"這次是跟著示範唸，理想情況下不該有紅字。";
+  const expect=mode==="wrong"?`這次是跟著「唸錯的版本」唸（${t.note}），系統應該要說「太短」。`:"這次是跟著示範唸，理想情況下應該是綠字。";
   const feats=res.length.filter(g=>g.feat);
-  $("recOut").innerHTML=`<div class="note" style="margin-top:10px">${expect}</div><h3>回饋</h3>${res.fb.length?res.fb.map(f=>`<div class="fb bad">${f.msg}</div>`).join(""):`<div class="fb ok">每個音都有唸出來，長度和清濁音也沒有發現問題</div>`}
-  <h3>每個音有沒有唸出來（模型在那個位置認出這個音的機率）</h3><div class="scroll"><table><tr>${res.phones.map(x=>`<th class="mono">${x.q?"っ":""}${x.p}</th>`).join("")}</tr>
-  <tr>${res.phones.map(x=>`<td class="n ${!x.opt&&(x.on<0||x.post<SP.WEAK_P)?"bad":""}">${x.on<0?"—":pct(x.post)}</td>`).join("")}</tr></table></div>
+  $("recOut").innerHTML=`<div class="note" style="margin-top:10px">${expect}</div><h3>回饋</h3>${res.fb.length?res.fb.map(f=>`<div class="fb bad">${f.msg}</div>`).join(""):feats.length?`<div class="fb ok">${feats.map(g=>g.feat).join("、")}的長度夠</div>`:`<div class="fb warn">對不上，無法判斷，請再錄一次</div>`}
   <h3>長音／促音那一拍的長度（一格 20 毫秒）</h3><div class="scroll"><table><tr><th>拍</th><th>你</th><th>示範</th><th>實際長度</th><th>校正語速後</th></tr>
-  ${feats.map(g=>`<tr><td class="mono">${g.seg}（${g.feat}）</td><td class="n">${g.dL}</td><td class="n">${g.dR}</td><td class="n">${pct(g.abs)}</td><td class="n">${g.norm?pct(g.ratio):"太短無法校正"}</td></tr>`).join("")||`<tr><td colspan="5">${res.length.length?"這一段沒有長音或促音":"對不上，無法比較"}</td></tr>`}</table></div>
-  <h3>清濁音（正的表示像目標的音，負的表示像另一個）</h3><div class="scroll"><table><tr><th>目標</th><th>對照</th><th>差距</th></tr>
-  ${res.voice.map(v=>`<tr><td class="mono">${v.p}</td><td class="mono">${v.alt}</td><td class="n ${v.margin<0?"bad":""}">${v.margin}</td></tr>`).join("")||`<tr><td colspan="3">這一段沒有清濁成對的音</td></tr>`}</table></div>
-  <h3>參考</h3><div class="note mono">目標音素：${res.target}<br>模型自己輸出：${res.greedy}<br>對齊品質（每格平均 log 機率，越接近 0 越好）：${res.logpPerFrame}</div>`;
+  ${feats.map(g=>`<tr><td class="mono">${g.seg}（${g.feat}）</td><td class="n">${g.dL}</td><td class="n">${g.dR}</td><td class="n">${pct(g.abs)}</td><td class="n">${g.norm?pct(g.ratio):"太短無法校正"}</td></tr>`).join("")||`<tr><td colspan="5">對不上，無法比較</td></tr>`}</table></div>
+  <details style="margin-top:12px"><summary class="note">其他數值（測試過不可靠，只留著分析用）</summary>
+  <h3>模型在每個音的位置認出該音的機率</h3><div class="scroll"><table><tr>${res.phones.map(x=>`<th class="mono">${x.q?"っ":""}${x.p}</th>`).join("")}</tr>
+  <tr>${res.phones.map(x=>`<td class="n">${x.on<0?"—":pct(x.post)}</td>`).join("")}</tr></table></div>
+  <h3>清濁音差距（正的像目標，負的像另一個）</h3><div class="scroll"><table><tr><th>目標</th><th>對照</th><th>差距</th></tr>
+  ${res.voice.map(v=>`<tr><td class="mono">${v.p}</td><td class="mono">${v.alt}</td><td class="n">${v.margin}</td></tr>`).join("")||`<tr><td colspan="3">沒有清濁成對的音</td></tr>`}</table></div>
+  <div class="note mono">目標音素：${res.target}<br>模型自己輸出：${res.greedy}<br>對齊品質：${res.logpPerFrame}</div></details>`;
   REPORT.recordings.push({chunk:t.clip.id,kana:t.kana,imitated:mode||null,changed:mode==="wrong"?t.note:null,audioSec:+(pcm.length/16000).toFixed(1),sec:+sec.toFixed(1),...res});
   showReport();
 }
@@ -222,30 +225,20 @@ async function analyse(pcm,t,mode){
    正確版不該有任何回饋；唸錯版應該出現對應類別的回饋。 */
 async function chunkTest(){
   $("btnChunkTest").disabled=true;$("summary").innerHTML="";
-  const t0=performance.now(),speeds=[1,1.2,0.85],rows=[];
-  const want={sokuon:"short",long:"short",voice:"voice"};
-  const sum={okN:0,okFlag:0,okMissing:0,badN:0,badHit:0,badMissing:0,byCat:{}};
-  const jobs=[];for(const c of CHUNKS) for(const sp of speeds){if(sp!==1) jobs.push([c,c,sp,false]);if(c.bad) jobs.push([c,c.bad,sp,true]);}
+  const t0=performance.now(),speeds=[1,1.2,0.85],rows=[],sum={badN:0,badHit:0,okN:0,okFlag:0};
+  const jobs=[];for(const c of LEN_CHUNKS) for(const sp of speeds){if(sp!==1) jobs.push([c,c,sp,false]);jobs.push([c,c.bad,sp,true]);}
   let i=0;
   for(const [c,clip,sp,isBad] of jobs){
     $("testMsg").textContent=`第 ${++i} / ${jobs.length} 段…`;await tick();
-    const res=SP.analyse(await lsOfClip(clip,sp),c.kana,await lsOfClip(c,1));
-    const cats=res.fb.map(f=>f.cat);
-    rows.push({chunk:c.id,said:clip.said,speed:sp,wrong:isBad,complete:res.complete,fb:res.fb.map(f=>f.cat+":"+f.msg),feat:res.length.filter(g=>g.feat).map(g=>({seg:g.seg,abs:g.abs,ratio:g.ratio,norm:g.norm})),minVoice:res.voice.length?Math.min(...res.voice.map(v=>v.margin)):null,minPost:Math.min(...res.phones.filter(x=>!x.opt).map(x=>x.post))});
-    if(isBad){
-      const k=sum.byCat[c.cat]=sum.byCat[c.cat]||{n:0,hit:0};k.n++;sum.badN++;
-      if(cats.includes(want[c.cat])){k.hit++;sum.badHit++;}
-      if(cats.includes("missing")) sum.badMissing++;
-    }else{sum.okN++;if(cats.some(x=>x!=="missing")) sum.okFlag++;if(cats.includes("missing")) sum.okMissing++;}
+    const res=SP.analyse(await lsOfClip(clip,sp),c.kana,await lsOfClip(c,1)),flag=res.fb.some(f=>f.cat==="short");
+    rows.push({chunk:c.id,said:clip.said,speed:sp,wrong:isBad,flag,logpPerFrame:res.logpPerFrame,feat:res.length.filter(g=>g.feat).map(g=>({seg:g.seg,abs:g.abs,ratio:g.ratio,norm:g.norm}))});
+    if(isBad){sum.badN++;if(flag) sum.badHit++;}else{sum.okN++;if(flag) sum.okFlag++;}
   }
   const total=(performance.now()-t0)/1000;
   REPORT.chunktest={totalSec:+total.toFixed(1),...sum,rows};
-  const cat={sokuon:"促音",long:"長音",voice:"清濁音"};
   $("summary").innerHTML=`<div class="scroll"><table style="margin:8px 0"><tr><th>項目</th><th>結果</th></tr>
-  ${Object.entries(sum.byCat).map(([k,v])=>`<tr><td>唸錯版（${cat[k]}）：有抓到</td><td>${v.hit} / ${v.n}</td></tr>`).join("")}
-  <tr><td>正確版換語速：被誤報長度或清濁</td><td>${sum.okFlag} / ${sum.okN}</td></tr>
-  <tr><td>正確版換語速：被說有音沒唸出來</td><td>${sum.okMissing} / ${sum.okN}</td></tr>
-  <tr><td>唸錯版：被說有音沒唸出來</td><td>${sum.badMissing} / ${sum.badN}</td></tr></table></div>
+  <tr><td>唸錯版（少了長音或促音）：有抓到「太短」</td><td>${sum.badHit} / ${sum.badN}</td></tr>
+  <tr><td>正確版換語速：被誤報「太短」</td><td>${sum.okFlag} / ${sum.okN}</td></tr></table></div>
   <div class="note">共 ${total.toFixed(0)} 秒。這些是合成語音的結果，真人的聲音要另外測。</div>`;
   $("testMsg").textContent="完成";$("btnChunkTest").disabled=false;showReport();
 }

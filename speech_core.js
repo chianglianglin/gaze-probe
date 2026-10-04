@@ -192,28 +192,24 @@ function voicing(L,phones,base){
 }
 
 /* ---------- 一段錄音的完整分析 ----------
-   1. 先看每個音有沒有唸出來（該音在對齊位置上的最高機率）。沒唸出來的音太多時，長度和清濁的數字沒有意義，只回報哪些音沒跟上。
-   2. 長音／促音：實際長度（abs）和校正語速後的長度（ratio）都低於門檻才算太短。
-      只看校正後的值，遇到唸得慢又不均勻的初學者會誤判；只看實際長度，遇到語速不同的人會誤判。
-   3. 清濁音：目標音的機率輸給對應的清／濁音才提示。 */
-const WEAK_P=0.1;        // 最高機率低於這個值，視為「這個音沒有清楚唸出來」（暫定值，要用真人資料校正）
+   真模型測過之後的結論（合成語音，13 個小段 × 3 種語速）：
+   - 長音／促音的長度比對可用：唸錯版抓到 17/18，正確版誤報 1/12。
+   - 「每個音有沒有唸出來」（該音的最高機率）不可用：正確版有 19/26 被判成有音沒唸出來。
+   - 清濁音不可用：正確版有 7/26 被誤報。
+   所以回饋只給長度；每個音的機率和清濁音的差距照樣算出來放在結果裡，供之後分析，不拿來提示學習者。
+   長度規則：實際長度（abs）和校正語速後的長度（ratio）都低於門檻才算太短；段落太短無法校正時只看實際長度。 */
+const WEAK_P=0.1;        // 只用來在表格上標色，不產生回饋
 const ABS_TH=0.9,NORM_TH=0.9;
 function analyse(L,kana,R){
   const tg=kanaToPhones(kana),al=align(L,tg),fb=[];
   const phones=al.toks.map((t,k)=>({p:t.p+(t.long?t.p:""),q:t.q,opt:t.opt,on:al.on[k],post:al.gop[k]==null?0:+Math.exp(al.gop[k]).toFixed(3)}));
-  const need=phones.filter(x=>!x.opt),weak=need.filter(x=>x.on<0||x.post<WEAK_P);
-  const complete=weak.length<Math.max(2,Math.ceil(need.length*0.3));
-  if(weak.length) fb.push({cat:"missing",msg:(complete?"這個音不太清楚：":"有幾個音沒有跟上，先把這一段再聽一次：")+weak.map(x=>x.p).join("、")});
   const voice=voicing(L,tg,al),length=R?compareLength(al,align(R,tg)):[];
-  if(complete){
-    for(const v of voice) if(v.margin<0) fb.push({cat:"voice",msg:VOICELESS.has(v.p)?`${KANA_ROW[v.p]||v.p}的音聽起來偏濁，像${KANA_ROW[v.alt]||v.alt}`:`${KANA_ROW[v.p]||v.p}的音聽起來偏清，像${KANA_ROW[v.alt]||v.alt}`,margin:+v.margin.toFixed(2)});
-    for(const g of length){
-      if(!g.feat)continue;
-      const short=g.norm?(g.abs<ABS_TH&&g.ratio<NORM_TH):g.abs<SHORT_TH;
-      if(short) fb.push({cat:"short",msg:`「${g.seg}」的${g.feat}太短（實際長度是示範的 ${Math.round(g.abs*100)}%${g.norm?`，校正語速後 ${Math.round(g.ratio*100)}%`:""}）`});
-    }
+  for(const g of length){
+    if(!g.feat)continue;
+    const short=g.norm?(g.abs<ABS_TH&&g.ratio<NORM_TH):g.abs<SHORT_TH;
+    if(short) fb.push({cat:"short",msg:`${g.feat}太短：「${g.seg}」這一拍的長度是示範的 ${Math.round(g.abs*100)}%${g.norm?`（校正語速後 ${Math.round(g.ratio*100)}%）`:""}`});
   }
-  return {target:tg.map(t=>t.opt?"("+t.p+")":t.p).join(" "),greedy:greedy(L).join(" "),logpPerFrame:+(al.logp/L.F).toFixed(3),complete,phones,
+  return {target:tg.map(t=>t.opt?"("+t.p+")":t.p).join(" "),greedy:greedy(L).join(" "),logpPerFrame:+(al.logp/L.F).toFixed(3),phones,
     voice:voice.map(v=>({p:v.p,alt:v.alt,margin:+v.margin.toFixed(2)})),length:length.map(g=>({...g,abs:+g.abs.toFixed(2),ratio:+g.ratio.toFixed(2)})),fb};
 }
 
