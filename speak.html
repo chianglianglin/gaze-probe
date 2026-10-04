@@ -61,7 +61,7 @@ audio{width:100%;height:36px;margin-top:6px}
 <body>
 <div id="app"><p class="warn" style="font-size:17px;margin-top:40px">頁面資料下載中，請稍候…</p></div>
 <!-- 檔名後面的 ?v= 每次改版都要換，瀏覽器才不會用到舊的快取 -->
-<script src="speak_data.js?v=1"></script>
+<script src="speak_data.js?v=2"></script>
 <script src="speech_core.js?v=9"></script>
 <script>
 "use strict";
@@ -206,25 +206,41 @@ function startPractice(cfg){   // cfg: {title, head(html), steps:[{clip,pack,kan
    真人的聲音目前只有很少的資料，門檻之後要用累積的錄音校正；每次的原始數字都有存。 */
 const CLS={a:["a","o","ʌ","ə"],i:["i","e","y"],u:["u","o","ə","i"],e:["e","i","a"],o:["o","u","a"],k:["k","g","t","h"],g:["g","k","N","d","t"],s:["s","sh","z","ts"],sh:["sh","s","ch","j","z","ts"],z:["z","s","ts","j","d","ch","t"],j:["j","ch","z","sh","d"],t:["t","d","ts","ch","k"],d:["d","t","r","n"],ts:["ts","s","ch","t"],ch:["ch","ts","sh","j","t","s"],n:["n","N","m","r"],N:["N","n","m","r"],m:["m","N","n","b"],h:["h","f","s","sh","k"],f:["f","h","s","p"],b:["b","p","m","w","g"],p:["p","b"],r:["r","d","n","t"],w:["w","m","b","u","o","r"],y:["y","i","e"]};
 const clsOf=p=>CLS[p]||CLS[p[0]]||[p];
-let TOKPHONE=null;     // 模型詞表的每個符號 → 簡化音素（載入模型後建立）
+let TOKPHONE=null,VOCAB=null;     // 模型詞表的每個符號 → 它包含的簡化音素（載入模型後建立）
 function buildTokPhone(vocab){
-  TOKPHONE=vocab.map(tok=>{if(!tok||tok[0]==="<")return null;const seq=SP.normToken(tok).filter(x=>x!=="Q");return seq.length&&seq.every(x=>x===seq[0])?seq[0]:null;});
+  // 模型常把相連的音合成一個符號（例如 あい 輸出成一個 aɪ），所以一個符號可以同時算它包含的每個音
+  VOCAB=vocab;
+  TOKPHONE=vocab.map(tok=>{if(!tok||tok[0]==="<")return null;const seq=[...new Set(SP.normToken(tok).filter(x=>x!=="Q"))];return seq.length?seq:null;});
 }
+const isVowel=p=>"aiueo".includes(p[0])&&"aiueo".includes(p[p.length-1])&&p.length<=2;
 function soundCheck(L,kana){
   const al=SP.align(L,SP.kanaToPhones(kana)),{F,S,ls}=L,K=al.toks.length,out=[];
   for(let k=0;k<K;k++){
-    const t=al.toks[k],e={p:t.p+(t.long?t.p:""),q:t.q,opt:t.opt,post:0};out.push(e);
+    const t=al.toks[k],e={p:t.p+(t.long?t.p:""),q:t.q,opt:t.opt,post:0,top:""};out.push(e);
     if(al.on[k]<0||!TOKPHONE)continue;
     let end=F-1;for(let j=k+1;j<K;j++) if(al.on[j]>=0){end=al.on[j]-1;break;}
-    const cls=new Set(clsOf(t.p)),t0=Math.max(0,al.on[k]-1),t1=Math.min(F-1,Math.max(end,al.on[k]));
-    for(let f=t0;f<=t1;f++){let sum=0;for(let v=1;v<S;v++){const ph=TOKPHONE[v];if(ph&&cls.has(ph)) sum+=Math.exp(ls[f*S+v]);}if(sum>e.post) e.post=sum;}
+    const cls=new Set(clsOf(t.p)),t0=Math.max(0,al.on[k]-1),t1=Math.min(F-1,Math.max(end,al.on[k])),seen={};
+    for(let f=t0;f<=t1;f++){
+      let sum=0;
+      for(let v=1;v<S;v++){
+        const pr=Math.exp(ls[f*S+v]);if(pr<0.02)continue;
+        if(pr>(seen[v]||0)) seen[v]=pr;
+        const ph=TOKPHONE[v];if(ph&&ph.some(x=>cls.has(x))) sum+=pr;
+      }
+      if(sum>e.post) e.post=sum;
+    }
     e.post=+Math.min(1,e.post).toFixed(3);
+    e.top=Object.entries(seen).filter(([v])=>VOCAB[v]&&VOCAB[v][0]!=="<").sort((x,y)=>y[1]-x[1]).slice(0,3).map(([v,pr])=>VOCAB[v]+Math.round(pr*100)).join(",");   // 這個位置模型實際聽到什麼，留著之後校正用
   }
+  // 連續母音：模型分不清相鄰的母音，常併成一個；弱的母音旁邊有清楚的母音時，不算漏唸
+  out.forEach((e,k)=>{
+    if(e.post<WEAK_P&&isVowel(e.p)){const a=out[k-1],b=out[k+1];if((a&&isVowel(a.p)&&a.post>=0.3)||(b&&isVowel(b.p)&&b.post>=0.3)) e.merged=true;}
+  });
   return out;
 }
 const WEAK_P=0.1,LPF_ONE=-0.45,LEN_MIN=0.9;
 function judge(res){
-  const lines=[],need=res.cls.filter(x=>!x.opt),weak=need.filter(x=>x.post<WEAK_P);
+  const lines=[],need=res.cls.filter(x=>!x.opt),weak=need.filter(x=>x.post<WEAK_P&&!x.merged);
   // 全部的音都有 → 過；只有一個音不清楚、段落夠長、整體對得上 → 也算過（模型本身偶爾會漏認一個音）
   const soundOk=weak.length===0||(weak.length===1&&need.length>=5&&res.logpPerFrame>LPF_ONE);
   if(!soundOk){
@@ -264,9 +280,9 @@ function renderPractice(){
   if(P.res){
     const j=judge(P.res),vs=j.lines;
     html+=`<div class="card"><div class="verdict ${j.pass?"ok":"bad"}">${j.pass?"✓ 通過":"✗ 沒過，再唸一次"}</div>${vs.map(v=>`<div class="fb ${v.cls}">${v.msg}</div>`).join("")}
-    <div class="note" style="margin:6px 0 10px">裁判看兩件事：這一段有沒有唸出來、長音和促音夠不夠長。相近的音它分不出來（清濁音、し和す），那部分請聽自己的錄音和示範比較。</div>
+    <div class="note" style="margin:6px 0 10px">裁判看兩件事：這一段有沒有唸出來、長音和促音夠不夠長。相近的音它分不出來（清濁音、し和す、連在一起的母音），那部分請聽自己的錄音和示範比較。</div>
     <h3>每一拍的長度</h3>${barsHtml(P.res,vs)}
-    <h3>每個位置有沒有聽到那一類的音</h3><div class="post">${P.res.cls.map(x=>`<span class="${!x.opt&&x.post<WEAK_P?"bad":""}">${x.q?"っ":""}${x.p}<br>${Math.round(x.post*100)}%</span>`).join("")}</div></div>`;
+    <h3>每個位置有沒有聽到那一類的音</h3><div class="post">${P.res.cls.map(x=>`<span class="${!x.opt&&!x.merged&&x.post<WEAK_P?"bad":""}">${x.q?"っ":""}${x.p}<br>${x.merged?"併":Math.round(x.post*100)+"%"}</span>`).join("")}</div></div>`;
   }else if(P.url&&modelState!=="ready") html+=`<div class="card"><div class="note">長度分析還沒載入好，這次先聽自己的錄音和示範比較。</div></div>`;
   html+=`<div class="row" style="justify-content:space-between"><span class="note">${n>1?`第 ${P.i+1} / ${n} 步`:""}</span><button class="${P.url?"primary":""}" data-act="pnext">${P.i+1<n?"下一步 →":"完成"}</button></div>`;
   html+=`<div id="mstat" class="note" style="margin-top:14px"></div>`;
@@ -319,7 +335,8 @@ function logAttempt(t,sec,res,calc){
   S.log.push({at:Date.now(),clip:t.clip,kana:t.kana,audioSec:+sec.toFixed(1),calcSec:+calc.toFixed(1),
     pass:j?j.pass:null,soundOk:j?j.soundOk:null,lenOk:j?j.lenOk:null,
     lpf:res?res.logpPerFrame:null,greedy:res?res.greedy:null,
-    cls:res?res.cls.map(x=>x.p+(x.opt?"?":"")+":"+x.post).join(" "):null,
+    cls:res?res.cls.map(x=>x.p+(x.opt?"?":"")+(x.merged?"~":"")+":"+x.post).join(" "):null,
+    top:res?res.cls.map(x=>x.p+"="+x.top).join(" | "):null,
     post:res?res.phones.map(x=>x.p+":"+(x.on<0?"-":x.post)).join(" "):null,
     beats:res?res.length.map(g=>({seg:g.seg,feat:g.feat,dL:g.dL,dR:g.dR,abs:g.abs,ratio:g.ratio,norm:g.norm})):null});
   if(S.log.length>600) S.log.shift();
@@ -363,13 +380,13 @@ function lesson(id){
   <div class="card">${L.how.map(p=>`<p style="margin:6px 0">${p}</p>`).join("")}</div>
   ${L.pairs.length?`<div class="card"><h3>先用聽的：點一下，左右比較</h3>${L.pairs.map(p=>`<div class="duo">${[p.a,p.b].map(w=>`<button data-act="wplay" data-clip="${w.clip}"><div class="w">${w.kana}</div><div class="roma">${romaji(w.kana)}</div><div class="note">${w.zh}</div></button>`).join("")}</div>`).join("")}
   <div class="row"><button data-act="quiz" data-id="${L.id}">聽辨練習（6 題）</button><span class="note">${q.qn?`做過 ${q.qn} 題，答對 ${q.qok} 題`:""}</span></div></div>`:""}
-  <div class="card list"><h3>開口練：跟著唸</h3>${L.items.map((it,i)=>`<button data-act="litem" data-id="${L.id}" data-i="${i}"><span><b>${it.kana}</b>　<span class="roma">${romaji(it.kana)}</span>　${it.zh}</span><small class="${S.pass[it.clip]?"ok":""}">${S.pass[it.clip]?"✓ 通過":S.att[it.clip]?"錄過 "+S.att[it.clip]+" 次，還沒過":"還沒練"}</small></button>`).join("")}</div>
+  <div class="card list"><h3>開口練：跟著唸</h3>${L.items.map((it,i)=>`<button data-act="litem" data-id="${L.id}" data-i="${i}"><span><b>${it.kana}</b>${it.jp&&it.jp!==it.kana.replace(/ /g,"")?`（${it.jp}）`:""}　<span class="roma">${romaji(it.kana)}</span>　${it.zh}</span><small class="${S.pass[it.clip]?"ok":""}">${S.pass[it.clip]?"✓ 通過":S.att[it.clip]?"錄過 "+S.att[it.clip]+" 次，還沒過":"還沒練"}</small></button>`).join("")}</div>
   <div id="toast" class="bad" hidden></div>`);
 }
 ACT.wplay=d=>playClip(d.clip,"basics");
 ACT.litem=d=>{
   const L=D.lessons.find(l=>l.id===d.id);
-  startPractice({title:L.name,i:+d.i,steps:L.items.map((it,i)=>({clip:it.clip,pack:"basics",kana:it.kana,zh:it.zh,label:String(i+1)})),back:()=>lesson(L.id),onDone:()=>lesson(L.id)});
+  startPractice({title:L.name,i:+d.i,steps:L.items.map((it,i)=>({clip:it.clip,pack:"basics",kana:it.kana,jp:it.jp&&it.jp!==it.kana.replace(/ /g,"")?it.jp:null,zh:it.zh,label:String(i+1)})),back:()=>lesson(L.id),onDone:()=>lesson(L.id)});
 };
 let Q=null;
 ACT.quiz=d=>{const L=D.lessons.find(l=>l.id===d.id);Q={L,i:0,ok:0,n:6,cur:null};quizNext();};
@@ -429,7 +446,7 @@ ACT.data=()=>{
   <div class="row"><button data-act="export">匯出 JSON</button><button class="link" data-act="reset">全部重來</button></div>
   <div id="exp" hidden><textarea id="expt" readonly></textarea><div class="row"><button data-act="copy">複製</button><span id="copyMsg" class="note"></span></div></div>`);
 };
-ACT.export=()=>{document.getElementById("expt").value=JSON.stringify({page:"speak.html v3",when:new Date().toISOString(),ua:navigator.userAgent,model:modelState,...S},null,1);document.getElementById("exp").hidden=false;};
+ACT.export=()=>{document.getElementById("expt").value=JSON.stringify({page:"speak.html v5",when:new Date().toISOString(),ua:navigator.userAgent,model:modelState,...S},null,1);document.getElementById("exp").hidden=false;};
 ACT.copy=async()=>{const t=document.getElementById("expt");t.select();try{await navigator.clipboard.writeText(t.value);document.getElementById("copyMsg").textContent="已複製";}catch(e){try{document.execCommand("copy");document.getElementById("copyMsg").textContent="已複製";}catch(_){}}};
 ACT.reset=()=>{if(confirm("清除這台裝置上的所有練習紀錄？")){S=fresh();save();home();}};
 
